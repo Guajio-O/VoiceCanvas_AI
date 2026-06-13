@@ -1,0 +1,2551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>声画 VoiceCanvas - AI 语音绘图</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            color: #eaeaea;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; padding: 20px 0; }
+        .header h1 { font-size: 2.5rem; margin-bottom: 8px; }
+        .header h1 span { color: #e94560; }
+        .header p { color: #a0a0a0; }
+        
+        .config-panel {
+            background: rgba(22, 33, 62, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .config-group { display: flex; align-items: center; gap: 10px; }
+        .config-group label { font-size: 14px; color: #a0a0a0; }
+        .config-group input {
+            padding: 8px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 14px;
+            min-width: 250px;
+        }
+        .config-group input:focus { outline: none; border-color: #e94560; }
+        .config-group select {
+            padding: 8px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 14px;
+        }
+        .config-group select option {
+            color: #000;
+            background: #fff;
+        }
+        .ai-only.hidden {
+            display: none;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #e94560, #ff6b6b);
+            color: white;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4); }
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #eaeaea;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .btn-secondary:hover { background: rgba(255, 255, 255, 0.2); }
+        
+        .status-bar {
+            background: rgba(22, 33, 62, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .status-left { display: flex; align-items: center; gap: 16px; }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #4ecdc4;
+            animation: pulse 2s infinite;
+        }
+        .status-indicator.listening { background: #e94560; }
+        .status-indicator.processing { background: #ffd93d; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .status-text { font-size: 14px; color: #a0a0a0; }
+        .status-text span { color: #4ecdc4; }
+        
+        .main-area { display: grid; grid-template-columns: 1fr 350px; gap: 16px; }
+        .canvas-container {
+            background: rgba(22, 33, 62, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 16px;
+            position: relative;
+        }
+        #canvas {
+            width: 100%;
+            border-radius: 8px;
+            background: #0f0f1a;
+            display: block;
+        }
+        .canvas-hint {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #555;
+            pointer-events: none;
+        }
+        .canvas-hint.hide { display: none; }
+        
+        .panel {
+            background: rgba(22, 33, 62, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .panel-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+        
+        .log-container {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 300px;
+            margin-bottom: 16px;
+        }
+        .log-item {
+            padding: 10px 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        .log-item.success { background: rgba(78, 205, 196, 0.15); }
+        .log-item.error { background: rgba(233, 69, 96, 0.15); }
+        .log-item.info { background: rgba(255, 217, 61, 0.15); }
+        
+        .controls { display: flex; flex-direction: column; gap: 10px; }
+        
+        .wave-container {
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 16px;
+        }
+        .wave-bar {
+            width: 4px;
+            height: 20px;
+            background: linear-gradient(180deg, #e94560, #ff6b6b);
+            border-radius: 2px;
+            animation: wave 0.5s ease-in-out infinite alternate;
+        }
+        @keyframes wave {
+            from { height: 5px; }
+            to { height: 40px; }
+        }
+        
+        .hint {
+            background: rgba(78, 205, 196, 0.1);
+            border: 1px solid rgba(78, 205, 196, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 16px;
+        }
+        .hint p { font-size: 12px; color: #a0a0a0; }
+        .hint span {
+            background: rgba(78, 205, 196, 0.2);
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-right: 4px;
+            color: #4ecdc4;
+        }
+        
+        .api-status {
+            font-size: 12px;
+            padding: 6px 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            text-align: center;
+        }
+        .api-status.ready { background: rgba(78, 205, 196, 0.2); color: #4ecdc4; }
+        .api-status.error { background: rgba(233, 69, 96, 0.2); color: #e94560; }
+        
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            color: #ccc;
+        }
+        .checkbox-label input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        
+        @media (max-width: 900px) {
+            .main-area { grid-template-columns: 1fr; }
+            .config-panel { flex-direction: column; align-items: stretch; }
+            .config-group { flex-direction: column; align-items: stretch; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><span>🎨</span> 声画 VoiceCanvas <span>AI</span></h1>
+            <p>语音控制的 AI 绘图工具 - 使用 Hugging Face API</p>
+        </div>
+
+        <div class="config-panel">
+            <div class="config-group ai-only" id="apiUrlGroup">
+                <label>API 地址:</label>
+                <input type="text" id="apiUrlInput" placeholder="例如: https://api-inference.huggingface.co">
+            </div>
+            <div class="config-group ai-only" id="apiKeyGroup">
+                <label>API Key:</label>
+                <input type="password" id="apiKey" placeholder="输入您的 API Key">
+            </div>
+            <div class="config-group ai-only" id="modelGroup">
+                <label>模型名称:</label>
+                <input type="text" id="modelInput" placeholder="例如: stabilityai/stable-diffusion-xl-base-1.0">
+            </div>
+            <div class="config-group">
+                <label>模式:</label>
+                <select id="modeSelect" onchange="updateModeVisibility()">
+                    <option value="ai" selected>AI 绘图模式</option>
+                    <option value="local">本地绘图模式</option>
+                </select>
+            </div>
+
+            <button class="btn btn-primary" onclick="saveConfig()">保存配置</button>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-left">
+                <div class="status-indicator" id="statusIndicator"></div>
+                <div class="status-text">状态: <span id="statusText">就绪</span></div>
+            </div>
+            <div class="status-text" id="recognizedText"></div>
+        </div>
+
+        <div class="main-area">
+            <div class="canvas-container">
+                <canvas id="canvas" width="800" height="600"></canvas>
+                <div class="canvas-hint" id="canvasHint">
+                    <p>说"开始绘图"启动语音识别</p>
+                    <p style="margin-top:8px;color:#666;font-size:12px;">示例："画一只可爱的猫"、"画美丽的风景"</p>
+                </div>
+                <img id="aiImage" src="" style="display:none;position:absolute;top:16px;left:16px;max-width:calc(100% - 32px);max-height:calc(100% - 32px);border-radius:8px;" />
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">📝 指令日志</div>
+                <div class="log-container" id="logContainer"></div>
+                
+                <div class="controls">
+                    <button class="btn btn-primary" id="listenBtn" onclick="toggleListening()">开始监听</button>
+                    <button class="btn btn-secondary" onclick="clearCanvas()">清空画布</button>
+                    <button class="btn btn-secondary" onclick="undo()">撤销</button>
+                </div>
+
+                <div class="wave-container" id="waveContainer" style="display:none;">
+                    <div class="wave-bar" style="animation-delay: 0s;"></div>
+                    <div class="wave-bar" style="animation-delay: 0.05s;"></div>
+                    <div class="wave-bar" style="animation-delay: 0.1s;"></div>
+                    <div class="wave-bar" style="animation-delay: 0.15s;"></div>
+                    <div class="wave-bar" style="animation-delay: 0.2s;"></div>
+                    <div class="wave-bar" style="animation-delay: 0.25s;"></div>
+                    <div class="wave-bar" style="animation-delay: 0.3s;"></div>
+                    <div class="wave-bar" style="animation-delay: 0.35s;"></div>
+                    <div class="wave-bar" style="animation-delay: 0.4s;"></div>
+                    <div class="wave-bar" style="animation-delay: 0.45s;"></div>
+                </div>
+
+                <div class="api-status" id="apiStatus">请配置 API Key</div>
+
+                <div class="hint">
+                    <p><span>AI模式</span>说任意描述生成图片</p>
+                    <p style="margin-top:8px;"><span>本地模式</span>画圆、画矩形、画太阳、画月亮</p>
+                    <p style="margin-top:8px;"><span>控制</span>清空、撤销、粗一点、细一点</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 配置
+        let config = {
+            apiUrl: '',
+            apiKey: '',
+            model: '',
+            mode: 'ai'
+        };
+
+        // DOM 元素
+        const apiUrlInput = document.getElementById('apiUrlInput');
+        const apiKeyInput = document.getElementById('apiKey');
+        const modelInput = document.getElementById('modelInput');
+        const modeSelect = document.getElementById('modeSelect');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        const recognizedText = document.getElementById('recognizedText');
+        const canvas = document.getElementById('canvas');
+        const canvasHint = document.getElementById('canvasHint');
+        const aiImage = document.getElementById('aiImage');
+        const logContainer = document.getElementById('logContainer');
+        const listenBtn = document.getElementById('listenBtn');
+        const waveContainer = document.getElementById('waveContainer');
+        const apiStatus = document.getElementById('apiStatus');
+
+        // 状态
+        let isListening = false;
+        let currentColor = '#e94560';
+        let strokeWidth = 3;
+        let shapes = [];
+        let recognition = null;
+        let synth = window.speechSynthesis;
+
+        // 翻译字典 - 动词、名词、形容词
+        const TRANSLATION_DICT = {
+            // 动词
+            '画': 'draw', '画一个': 'draw a', '画一只': 'draw a', '画一张': 'draw a',
+            '画一幅': 'draw a', '画一些': 'draw some', '画许多': 'draw many',
+            '绘制': 'draw', '画个': 'draw a', '画点': 'draw some',
+            
+            // 日常动词
+            '在': '', '正在': '', '在晒': 'sunbathing', '晒太阳': 'sunbathing',
+            '晒': 'sunbathe', '坐': 'sitting', '站': 'standing', '躺': 'lying',
+            '飞': 'flying', '跑': 'running', '跳': 'jumping', '走': 'walking',
+            '吃': 'eating', '喝': 'drinking', '玩': 'playing', '看': 'looking',
+            '听': 'listening', '读': 'reading', '写': 'writing', '睡': 'sleeping',
+            '休息': 'resting', '工作': 'working', '学习': 'studying', '思考': 'thinking',
+            
+            // 助词和连接词
+            '的': '', '地': '', '得': '', '着': '', '了': '', '过': '',
+            '呢': '', '吗': '', '吧': '', '啊': '', '呀': '', '哦': '',
+            '里': '', '外': '', '中': '', '上': '', '下': '', '前': '', '后': '',
+            '和': 'and', '与': 'and', '跟': 'and', '及': 'and', '同': 'and',
+            '与...一起': 'with', '和...一起': 'with', '一起': 'together',
+            '旁边': 'beside', '附近': 'near', '周围': 'around',
+            
+            // 量词
+            '一个': 'a', '一只': 'a', '一张': 'a', '一幅': 'a',
+            '一些': 'some', '许多': 'many', '几个': 'several',
+            
+            // 形容词
+            '可爱的': 'cute', '美丽的': 'beautiful', '漂亮的': 'pretty',
+            '有趣的': 'funny', '卡通': 'cartoon', '好看的': 'nice',
+            '迷人的': 'charming', '神秘的': 'mysterious', '神奇的': 'magical',
+            '梦幻的': 'dreamy', '梦幻': 'dreamy', '科幻': 'sci-fi',
+            '未来': 'futuristic', '复古': 'vintage', '古典': 'classical',
+            '简单': 'simple', '复杂': 'complex', '详细': 'detailed',
+            '抽象': 'abstract', '写实': 'realistic', '明亮的': 'bright',
+            '暗淡的': 'dark', '大的': 'big', '小的': 'small', '巨大的': 'huge',
+            
+            // 名词 - 图形
+            '圆': 'circle', '圆圈': 'circle', '环形': 'circle', '环': 'circle',
+            '矩形': 'rectangle', '方': 'square', '方形': 'square', '正方形': 'square',
+            '长方形': 'rectangle', '线': 'line', '直线': 'line',
+            '三角形': 'triangle', '三角': 'triangle', '椭圆': 'ellipse',
+            '蛋形': 'ellipse', '星星': 'star', '五角星': 'star', '五角': 'star',
+            '五边形': 'pentagon', '心形': 'heart', '爱心': 'heart', '十字': 'cross',
+            '十字架': 'cross', '太阳': 'sun', '月亮': 'moon', '房子': 'house',
+            '树': 'tree', '树木': 'tree', '彩虹': 'rainbow', '钻石': 'diamond',
+            '箭头': 'arrow', '波浪': 'wave', '曲线': 'curve', '螺旋': 'spiral',
+            
+            // 名词 - 动物
+            '猫': 'cat', '狗': 'dog', '鸟': 'bird', '兔子': 'rabbit', '熊猫': 'panda',
+            '老虎': 'tiger', '狮子': 'lion', '马': 'horse', '鱼': 'fish',
+            '蝴蝶': 'butterfly', '蜜蜂': 'bee', '熊': 'bear', '狐狸': 'fox',
+            '鹿': 'deer', '狼': 'wolf', '龙': 'dragon', '独角兽': 'unicorn',
+            '青蛙': 'frog', '蛇': 'snake', '企鹅': 'penguin', '海豚': 'dolphin',
+            '乌龟': 'turtle',
+            
+            // 名词 - 自然
+            '花': 'flower', '草': 'grass', '山': 'mountain', '海': 'ocean',
+            '天空': 'sky', '云': 'cloud', '雨': 'rain', '雪': 'snow',
+            '河': 'river', '湖': 'lake', '水': 'water', '大海': 'ocean',
+            
+            // 名词 - 人造物
+            '汽车': 'car', '飞机': 'airplane', '船': 'ship', '火车': 'train',
+            '火箭': 'rocket', '机器人': 'robot', '城堡': 'castle', '桥': 'bridge',
+            '杯子': 'cup', '雨伞': 'umbrella', '书本': 'book', '帽子': 'hat',
+            '雪人': 'snowman', '气球': 'balloon', '礼物': 'gift',
+            
+            // 颜色
+            '红色': 'red', '蓝色': 'blue', '绿色': 'green', '黄色': 'yellow',
+            '紫色': 'purple', '粉色': 'pink', '橙色': 'orange', '白色': 'white',
+            '黑色': 'black', '彩色': 'colorful', '金色': 'golden', '银色': 'silver',
+            '青色': 'cyan', '灰色': 'gray', '棕色': 'brown',
+            
+            // 表情
+            '笑脸': 'smiley', '哭脸': 'sad face', '微笑': 'smile', '开心': 'happy',
+            '难过': 'sad', '生气': 'angry',
+        };
+
+        // 动词列表
+        const VERBS = ['画', '画一个', '画一只', '画一张', '画一幅', '画一些', '画许多', '绘制', '画个', '画点'];
+        
+        // 名词列表 - 可绘制的图形
+        const NOUNS_SHAPES = ['圆', '圆圈', '环形', '环', '矩形', '方', '方形', '正方形', '长方形',
+            '线', '直线', '三角形', '三角', '椭圆', '蛋形', '星星', '五角星', '五角',
+            '五边形', '心形', '爱心', '十字', '十字架', '太阳', '月亮', '房子',
+            '树', '树木', '彩虹', '钻石', '箭头', '波浪', '曲线', '螺旋',
+            '猫', '猫咪', '小猫', '狗', '小狗', '狗狗', '鸟', '小鸟', '鱼', '小鱼',
+            '蝴蝶', '兔子', '小兔', '熊猫', '蜜蜂', '花朵', '花', '小花', '云朵', '云',
+            '雪人', '气球', '礼物', '礼盒',
+            // 交通工具
+            '汽车', '小车', '轿车', '车', '飞机', '飞机', '船', '小船', '轮船', '火车',
+            // 自然景物
+            '山', '山峰', '小山', '河', '河流', '湖', '湖泊', '水', '大海', '风景', '景色', '场景', '天空',
+            // 日常物品
+            '杯子', '水杯', '雨伞', '伞', '书本', '书', '帽子', '帽',
+            // 更多动物
+            '老虎', '狮子', '马', '小马', '青蛙', '蛇', '企鹅', '海豚', '乌龟'];
+        
+        // 名词列表 - 颜色
+        const NOUNS_COLORS = ['红色', '蓝色', '绿色', '黄色', '紫色', '粉色', '橙色', '白色',
+            '黑色', '彩色', '金色', '银色', '青色', '灰色', '棕色'];
+
+        // 图形同义词映射
+        const SHAPE_SYNONYMS = {
+            '圆': ['圆', '圆圈', '环形', '环', '画个圆', '一个圆'],
+            '矩形': ['矩形', '方', '方形', '正方形', '长方形', '画个方'],
+            '线': ['线', '直线', '画线'],
+            '三角形': ['三角形', '三角', '三方'],
+            '椭圆': ['椭圆', '蛋形', '鸡蛋'],
+            '星星': ['星星', '五角星', '五角'],
+            '五边形': ['五边形', '五角形'],
+            '心形': ['心形', '爱心', '爱'],
+            '十字': ['十字', '十字架', '交叉'],
+            '太阳': ['太阳'],
+            '月亮': ['月亮'],
+            '房子': ['房子'],
+            '树': ['树', '树木', '大树'],
+            '彩虹': ['彩虹'],
+            '钻石': ['钻石'],
+            '箭头': ['箭头'],
+            '波浪': ['波浪'],
+            // 动物
+            '猫': ['猫', '猫咪', '小猫'],
+            '狗': ['狗', '小狗', '狗狗'],
+            '鸟': ['鸟', '小鸟'],
+            '鱼': ['鱼', '小鱼'],
+            '蝴蝶': ['蝴蝶'],
+            '兔子': ['兔子', '小兔'],
+            '熊猫': ['熊猫'],
+            '蜜蜂': ['蜜蜂'],
+            '花朵': ['花朵', '花', '小花'],
+            '云朵': ['云朵', '云'],
+            '雪人': ['雪人'],
+            '气球': ['气球'],
+            '礼物': ['礼物', '礼盒'],
+            // 交通工具
+            '汽车': ['汽车', '小车', '轿车', '车'],
+            '飞机': ['飞机'],
+            '船': ['船', '小船', '轮船'],
+            '火车': ['火车'],
+            // 自然景物
+            '山': ['山', '山峰', '小山'],
+            '河': ['河', '河流'],
+            '湖': ['湖', '湖泊'],
+            '水': ['水', '大海'],
+            '风景': ['风景', '景色', '场景'],
+            '天空': ['天空'],
+            // 日常物品
+            '杯子': ['杯子', '水杯'],
+            '雨伞': ['雨伞', '伞'],
+            '书本': ['书本', '书'],
+            '帽子': ['帽子', '帽'],
+            // 更多动物
+            '老虎': ['老虎'],
+            '狮子': ['狮子'],
+            '马': ['马', '小马'],
+            '青蛙': ['青蛙'],
+            '蛇': ['蛇'],
+            '企鹅': ['企鹅'],
+            '海豚': ['海豚'],
+            '乌龟': ['乌龟'],
+        };
+
+        const COLORS = {
+            '红色': '#e94560', '蓝色': '#4facfe', '绿色': '#43e97b',
+            '黄色': '#ffd93d', '黑色': '#333', '白色': '#fff',
+            '紫色': '#a855f7', '橙色': '#ff9f43', '粉色': '#ff6b9d',
+            '青色': '#00d9ff', '灰色': '#6b7280', '棕色': '#8b4513'
+        };
+
+        // 初始化
+        function init() {
+            const savedUrl = localStorage.getItem('huggingfaceApiUrl');
+            const savedKey = localStorage.getItem('huggingfaceApiKey');
+            const savedModel = localStorage.getItem('huggingfaceModel');
+            const savedMode = localStorage.getItem('drawingMode');
+            
+            config.apiUrl = savedUrl || config.apiUrl;
+            config.apiKey = savedKey || config.apiKey;
+            config.model = savedModel || config.model;
+            config.mode = savedMode || config.mode;
+            
+            apiUrlInput.value = config.apiUrl;
+            apiKeyInput.value = config.apiKey;
+            modelInput.value = config.model;
+            modeSelect.value = config.mode;
+            updateModeVisibility();
+            updateApiStatus();
+        }
+
+        function updateModeVisibility() {
+            const isAI = modeSelect.value === 'ai';
+            document.getElementById('apiUrlGroup').classList.toggle('hidden', !isAI);
+            document.getElementById('apiKeyGroup').classList.toggle('hidden', !isAI);
+            document.getElementById('modelGroup').classList.toggle('hidden', !isAI);
+            config.mode = modeSelect.value;
+        }
+
+        function saveConfig() {
+            config.apiUrl = apiUrlInput.value;
+            config.apiKey = apiKeyInput.value;
+            config.model = modelInput.value;
+            config.mode = modeSelect.value;
+            localStorage.setItem('huggingfaceApiUrl', config.apiUrl);
+            localStorage.setItem('huggingfaceApiKey', config.apiKey);
+            localStorage.setItem('huggingfaceModel', config.model);
+            localStorage.setItem('drawingMode', config.mode);
+            updateApiStatus();
+            addLog('配置已保存', 'success');
+            speak('配置已保存');
+        }
+
+        function updateApiStatus() {
+            if (config.mode === 'ai') {
+                if (!config.apiUrl || !config.apiKey || !config.model) {
+                    apiStatus.textContent = '⚠ 请完善 AI 配置（API地址、Key、模型）';
+                    apiStatus.className = 'api-status error';
+                } else {
+                    apiStatus.textContent = '✓ AI 配置已就绪';
+                    apiStatus.className = 'api-status ready';
+                }
+            } else {
+                apiStatus.textContent = '✓ 使用本地模式';
+                apiStatus.className = 'api-status ready';
+            }
+        }
+
+        function toggleListening() {
+            if (isListening) {
+                stopListening();
+            } else {
+                startListening();
+            }
+        }
+
+        function startListening() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                addLog('您的浏览器不支持语音识别', 'error');
+                speak('您的浏览器不支持语音识别，请使用 Chrome 或 Edge');
+                return;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = 'zh-CN';
+            recognition.continuous = true;
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 1;
+
+            recognition.onstart = () => {
+                isListening = true;
+                listenBtn.textContent = '停止监听';
+                statusIndicator.className = 'status-indicator listening';
+                statusText.textContent = '正在监听...';
+                waveContainer.style.display = 'flex';
+                hideCanvasHint();
+            };
+
+            recognition.onresult = (event) => {
+                const text = event.results[event.results.length - 1][0].transcript.trim();
+                recognizedText.textContent = `识别: ${text}`;
+                addLog(`听到: ${text}`, 'info');
+                handleCommand(text);
+            };
+
+            recognition.onerror = (event) => {
+                handleRecognitionError(event);
+            };
+
+            recognition.onend = () => {
+                if (isListening) {
+                    recognition.start();
+                }
+            };
+
+            recognition.start();
+        }
+
+        function stopListening() {
+            if (recognition) {
+                recognition.stop();
+            }
+            isListening = false;
+            listenBtn.textContent = '开始监听';
+            statusIndicator.className = 'status-indicator';
+            statusText.textContent = '已停止';
+            waveContainer.style.display = 'none';
+            recognizedText.textContent = '';
+        }
+
+        function handleRecognitionError(event) {
+            switch (event.error) {
+                case 'no-speech':
+                    break;
+                case 'audio-capture':
+                    addLog('无法访问麦克风，请检查权限', 'error');
+                    speak('无法访问麦克风，请检查权限');
+                    stopListening();
+                    break;
+                case 'not-allowed':
+                    addLog('麦克风权限被拒绝', 'error');
+                    speak('麦克风权限被拒绝，请在浏览器设置中开启');
+                    stopListening();
+                    break;
+                case 'network':
+                    addLog('网络连接失败', 'error');
+                    speak('网络连接失败，请检查网络');
+                    break;
+                default:
+                    addLog(`识别错误: ${event.error}`, 'error');
+                    speak('识别出现问题，请重试');
+            }
+        }
+
+        async function handleCommand(text) {
+            addLog(`当前模式: ${config.mode}`, 'info');
+            if (config.mode === 'ai') {
+                await handleAICommand(text);
+            } else {
+                await handleLocalCommand(text);
+            }
+        }
+
+        async function handleAICommand(text) {
+            if (/^(清空|清除|重来|重置)/.test(text)) {
+                clearCanvas();
+                speak('画布已清空');
+                return;
+            }
+            if (/^(撤销|回退|后退)/.test(text)) {
+                undo();
+                return;
+            }
+            if (/^(停止|结束)/.test(text)) {
+                stopListening();
+                speak('已停止监听');
+                return;
+            }
+
+            if (!config.apiKey || config.apiKey.length === 0) {
+                addLog('请配置 API 密钥', 'error');
+                speak('请配置 API 密钥');
+                return;
+            }
+
+            statusIndicator.className = 'status-indicator processing';
+            statusText.textContent = 'AI 生成中...';
+            addLog(`正在生成: ${text}`, 'info');
+
+            try {
+                const prompt = translateToEnglish(text);
+                addLog(`提示词: ${prompt}`, 'info');
+
+                const imageBlob = await generateImage(prompt);
+                const imageUrl = URL.createObjectURL(imageBlob);
+                
+                aiImage.src = imageUrl;
+                aiImage.style.display = 'block';
+                canvas.style.display = 'none';
+                
+                addLog('图片生成成功！', 'success');
+                speak('图片生成成功');
+            } catch (error) {
+                addLog(`生成失败: ${error.message}`, 'error');
+                addLog('错误原因：浏览器阻止了跨域请求', 'info');
+                addLog('解决方案：1. 使用Firefox浏览器 2. 安装Node.js运行本地服务器', 'info');
+                speak('生成失败，请尝试使用Firefox浏览器或安装Node.js');
+            } finally {
+                statusIndicator.className = 'status-indicator listening';
+                statusText.textContent = '正在监听...';
+            }
+        }
+
+        function translateToEnglish(text) {
+            const translations = {
+                // 动词
+                '画': 'Draw ',
+                '画一个': 'Draw a ',
+                '画一只': 'Draw a ',
+                '画一张': 'Draw a ',
+                '画一幅': 'Draw a ',
+                '画一些': 'Draw some ',
+                '画许多': 'Draw many ',
+                '画几个': 'Draw several ',
+                // 量词
+                '一个': 'a ',
+                '一只': 'a ',
+                '一张': 'a ',
+                '一幅': 'a ',
+                '一些': 'some ',
+                '一些': 'several ',
+                '许多': 'many ',
+                // 形容词
+                '可爱的': 'cute ',
+                '美丽的': 'beautiful ',
+                '漂亮的': 'pretty ',
+                '有趣的': 'funny ',
+                '卡通': 'cartoon ',
+                '风格': 'style ',
+                '好看的': 'nice ',
+                '迷人的': 'charming ',
+                '神秘的': 'mysterious ',
+                '神奇的': 'magical ',
+                '梦幻的': 'dreamy ',
+                '梦幻': 'dreamy ',
+                '科幻': 'sci-fi ',
+                '未来': 'futuristic ',
+                '复古': 'vintage ',
+                '古典': 'classical ',
+                // 名词
+                '猫': 'cat',
+                '狗': 'dog',
+                '鸟': 'bird',
+                '花': 'flower',
+                '树': 'tree',
+                '太阳': 'sun',
+                '月亮': 'moon',
+                '星星': 'star',
+                '山': 'mountain',
+                '海': 'ocean',
+                '天空': 'sky',
+                '风景': 'landscape',
+                '城市': 'city',
+                '房子': 'house',
+                '汽车': 'car',
+                '飞机': 'airplane',
+                '人': 'person',
+                '女孩': 'girl',
+                '男孩': 'boy',
+                '兔子': 'rabbit',
+                '熊猫': 'panda',
+                '老虎': 'tiger',
+                '狮子': 'lion',
+                '马': 'horse',
+                '鱼': 'fish',
+                '蝴蝶': 'butterfly',
+                '蜜蜂': 'bee',
+                '熊': 'bear',
+                '狐狸': 'fox',
+                '鹿': 'deer',
+                '狼': 'wolf',
+                '龙': 'dragon',
+                '独角兽': 'unicorn',
+                '城堡': 'castle',
+                '宫殿': 'palace',
+                '桥': 'bridge',
+                '船': 'ship',
+                '船': 'boat',
+                '火车': 'train',
+                '火箭': 'rocket',
+                '机器人': 'robot',
+                '外星人': 'alien',
+                '精灵': 'fairy',
+                '天使': 'angel',
+                '恶魔': 'demon',
+                '英雄': 'hero',
+                '公主': 'princess',
+                '王子': 'prince',
+                // 颜色
+                '红色': 'red',
+                '蓝色': 'blue',
+                '绿色': 'green',
+                '黄色': 'yellow',
+                '紫色': 'purple',
+                '粉色': 'pink',
+                '橙色': 'orange',
+                '白色': 'white',
+                '黑色': 'black',
+                '彩色': 'colorful',
+                '金色': 'golden',
+                '银色': 'silver',
+                // 风格
+                '简单': 'simple',
+                '复杂': 'complex',
+                '详细': 'detailed',
+                '抽象': 'abstract',
+                '写实': 'realistic',
+                '油画': 'oil painting',
+                '水彩': 'watercolor',
+                '素描': 'sketch',
+                '数字艺术': 'digital art',
+                '像素': 'pixel art',
+                '动漫': 'anime',
+                '游戏': 'game art',
+                '插画': 'illustration',
+                '3D': '3D',
+                '超现实': 'surreal',
+                '印象派': 'impressionist',
+                // 符号
+                '。': ',',
+                '，': ',',
+                '！': '!',
+                '？': '?',
+            };
+
+            let result = text;
+            for (const [cn, en] of Object.entries(translations)) {
+                result = result.replace(new RegExp(cn, 'g'), en);
+            }
+            
+            if (!result.toLowerCase().startsWith('draw')) {
+                result = 'Draw ' + result;
+            }
+            
+            // 移除多余的空格
+            result = result.replace(/\s+/g, ' ').trim();
+            
+            return result + ', high quality, detailed, beautiful';
+        }
+
+        async function generateImage(prompt) {
+            // 构建 API 路径
+            let apiPath = config.apiUrl;
+            if (apiPath && !apiPath.endsWith('/')) {
+                apiPath += '/';
+            }
+            if (config.model) {
+                apiPath += 'models/' + config.model;
+            }
+            
+            // 如果是相对路径，使用本地代理
+            let fetchUrl = apiPath.startsWith('http') ? apiPath : '/api/' + apiPath;
+            
+            const response = await fetch(fetchUrl, {
+                headers: {
+                    Authorization: `Bearer ${config.apiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                method: 'POST',
+                body: JSON.stringify({ 
+                    inputs: prompt,
+                    parameters: {
+                        negative_prompt: 'ugly, blurry, low quality, distorted, text, watermark',
+                        width: 800,
+                        height: 600
+                    }
+                }),
+            });
+
+            if (!response.ok) {
+                try {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP ${response.status}`);
+                } catch {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            }
+
+            return await response.blob();
+        }
+
+        const SIMPLE_TRANSLATIONS = {
+            '画一只可爱的猫': 'Draw a cute cat',
+            '画一个圆': 'Draw a circle',
+            '画一个太阳': 'Draw a sun',
+            '画一个月亮': 'Draw a moon',
+            '画一只鸟': 'Draw a bird',
+            '画一只狗': 'Draw a dog',
+            '画一只猫': 'Draw a cat',
+            '画一只兔子': 'Draw a rabbit',
+            '画一只熊猫': 'Draw a panda',
+            '画一只蝴蝶': 'Draw a butterfly',
+            '画一只蜜蜂': 'Draw a bee',
+            '画一朵花': 'Draw a flower',
+            '画一朵云朵': 'Draw a cloud',
+            '画一个雪人': 'Draw a snowman',
+            '画一个气球': 'Draw a balloon',
+            '画一个礼物': 'Draw a gift',
+            '画一辆汽车': 'Draw a car',
+            '画一架飞机': 'Draw an airplane',
+            '画一艘船': 'Draw a ship',
+            '画一列火车': 'Draw a train',
+            '画一座山': 'Draw a mountain',
+            '画一条河': 'Draw a river',
+            '画一个湖': 'Draw a lake',
+            '画一个杯子': 'Draw a cup',
+            '画一把雨伞': 'Draw an umbrella',
+            '画一本书': 'Draw a book',
+            '画一顶帽子': 'Draw a hat',
+            '画一只老虎': 'Draw a tiger',
+            '画一只狮子': 'Draw a lion',
+            '画一匹马': 'Draw a horse',
+            '画一只青蛙': 'Draw a frog',
+            '画一条蛇': 'Draw a snake',
+            '画一只企鹅': 'Draw a penguin',
+            '画一只海豚': 'Draw a dolphin',
+            '画一只乌龟': 'Draw a turtle',
+            '可爱的猫在晒太阳': 'A cute cat is sunbathing',
+            '在晒太阳': 'is sunbathing',
+            '晒太阳': 'sunbathing',
+            '在飞': 'is flying',
+            '在跑': 'is running',
+            '在坐': 'is sitting',
+            '在站': 'is standing',
+            '在躺': 'is lying',
+            '在开车': 'is driving a car',
+            '开车': 'driving a car',
+            '车': 'car',
+        };
+
+        // 方位词列表
+        const DIRECTION_WORDS = {
+            '左': 'left', '左边': 'left', '左面': 'left', '左侧': 'left',
+            '右': 'right', '右边': 'right', '右面': 'right', '右侧': 'right',
+            '上': 'top', '上面': 'top', '上边': 'top', '上方': 'top',
+            '下': 'bottom', '下面': 'bottom', '下边': 'bottom', '下方': 'bottom',
+            '前': 'front', '前面': 'front', '前边': 'front',
+            '后': 'back', '后面': 'back', '后边': 'back',
+        };
+        
+        // 位置关系规则：确定哪些图形应该在哪个图形内部或上方
+        const POSITION_RULES = {
+            // 在内部
+            'inside': {
+                '鱼': ['河', '湖', '海', '水'],
+                '海豚': ['河', '湖', '海', '水'],
+                '乌龟': ['河', '湖', '海', '水'],
+                '青蛙': ['河', '湖', '海', '水'],
+            },
+            // 在上方
+            'onTop': {
+                '猫': ['汽车', '飞机', '船', '火车'],
+                '狗': ['汽车', '飞机', '船', '火车'],
+                '鸟': ['房子', '山'],
+                '马': ['山'],
+                '老虎': ['山'],
+                '狮子': ['山'],
+                '兔子': ['山'],
+                '蝴蝶': ['花', '树'],
+                '蜜蜂': ['花'],
+                '船': ['河', '湖', '海', '水'],
+            },
+            // 在旁边（支持方位）
+            'beside': {
+                '猫': ['汽车', '房子', '树'],
+                '狗': ['汽车', '房子', '树'],
+                '鸟': ['树', '房子'],
+                '兔子': ['树', '山'],
+                '蝴蝶': ['花', '树'],
+                '花朵': ['树'],
+            },
+            // 在下方（背景）
+            'background': {
+                '太阳': ['天空'],
+                '月亮': ['天空'],
+                '星星': ['天空'],
+            }
+        };
+
+        // 交通工具和自然元素（作为底层）
+        const BOTTOM_OBJECTS = ['汽车', '飞机', '船', '火车', '河', '湖', '海', '山', '房子', '树', '水'];
+        
+        // 可以作为顶层的对象
+        const TOP_OBJECTS = ['猫', '狗', '鸟', '鱼', '蝴蝶', '兔子', '熊猫', '蜜蜂', '青蛙', '蛇', '企鹅', '海豚', '乌龟', '老虎', '狮子', '马'];
+        
+        // 水中的动物
+        const WATER_ANIMALS = ['鱼', '海豚', '乌龟', '青蛙'];
+        
+        // 水相关的图形
+        const WATER_OBJECTS = ['河', '湖', '海', '水'];
+
+        function translateText(text) {
+            if (SIMPLE_TRANSLATIONS[text]) {
+                return SIMPLE_TRANSLATIONS[text];
+            }
+            
+            let result = text;
+            
+            // 合并所有翻译字典
+            const allTranslations = { ...DIRECTION_WORDS, ...SIMPLE_TRANSLATIONS, ...TRANSLATION_DICT };
+            
+            // 按长度排序，确保长词优先替换
+            const sortedKeys = Object.keys(allTranslations).sort((a, b) => b.length - a.length);
+            
+            // 逐个替换
+            for (const key of sortedKeys) {
+                if (result.includes(key)) {
+                    // 使用简单的字符串替换，避免正则表达式问题
+                    const regex = new RegExp(key, 'gi');
+                    result = result.replace(regex, ' ' + allTranslations[key] + ' ');
+                }
+            }
+            
+            // 清理多余空格和特殊字符
+            result = result.replace(/[\s\u3000]+/g, ' ').trim();
+            result = result.replace(/[<>\/\\]+/g, ' ').trim();
+            
+            return result;
+        }
+
+        function extractKeywords(text) {
+            const keywords = {
+                verbs: [],
+                shapes: [],
+                colors: [],
+                adjectives: []
+            };
+            
+            const lower = text.toLowerCase();
+            
+            for (const verb of VERBS) {
+                if (lower.includes(verb)) {
+                    keywords.verbs.push(verb);
+                }
+            }
+            
+            for (const shape of NOUNS_SHAPES) {
+                if (lower.includes(shape)) {
+                    keywords.shapes.push(shape);
+                }
+            }
+            
+            for (const color of NOUNS_COLORS) {
+                if (lower.includes(color)) {
+                    keywords.colors.push(color);
+                }
+            }
+            
+            return keywords;
+        }
+
+        async function handleLocalCommand(text) {
+            const lower = text.toLowerCase();
+
+            if (/^(清空|清除|重来|重置)/.test(lower)) {
+                clearCanvas();
+                speak('画布已清空');
+                return;
+            }
+
+            if (/^(撤销|回退|后退)/.test(lower)) {
+                undo();
+                return;
+            }
+
+            if (lower.includes('粗一点') || lower.includes('粗一些')) {
+                strokeWidth = Math.min(20, strokeWidth + 2);
+                addLog('线条变粗了', 'success');
+                speak('线条变粗了');
+                return;
+            }
+            if (lower.includes('细一点') || lower.includes('细一些')) {
+                strokeWidth = Math.max(1, strokeWidth - 2);
+                addLog('线条变细了', 'success');
+                speak('线条变细了');
+                return;
+            }
+
+            const translated = translateText(text);
+            const keywords = extractKeywords(text);
+            
+            addLog(`原文: ${text}`, 'info');
+            addLog(`翻译: ${translated}`, 'info');
+            addLog(`动词: ${keywords.verbs.join(', ') || '无'}`, 'info');
+            addLog(`图形: ${keywords.shapes.join(', ') || '无'}`, 'info');
+            addLog(`颜色: ${keywords.colors.join(', ') || '无'}`, 'info');
+
+            let hasAction = false;
+
+            if (keywords.colors.length > 0) {
+                for (const colorName of keywords.colors) {
+                    if (COLORS[colorName]) {
+                        currentColor = COLORS[colorName];
+                        addLog(`已切换到${colorName}`, 'success');
+                        hasAction = true;
+                    }
+                }
+            }
+
+            if (keywords.shapes.length > 0) {
+                const shapesToDraw = [];
+                for (const shapeName of keywords.shapes) {
+                    const standardShape = Object.keys(SHAPE_SYNONYMS).find(
+                        key => key === shapeName || SHAPE_SYNONYMS[key].includes(shapeName)
+                    );
+                    if (standardShape) {
+                        shapesToDraw.push(standardShape);
+                    }
+                }
+                
+                if (shapesToDraw.length > 0) {
+                    addMultipleShapes(shapesToDraw, text);
+                    hasAction = true;
+                }
+            }
+
+            if (hasAction) {
+                return;
+            }
+
+            for (const [name, color] of Object.entries(COLORS)) {
+                if (lower.includes(name)) {
+                    currentColor = color;
+                    addLog(`已切换到${name}`, 'success');
+                    speak(`已切换到${name}`);
+                    return;
+                }
+            }
+
+            for (const [standard, synonyms] of Object.entries(SHAPE_SYNONYMS)) {
+                if (lower.includes(standard) || synonyms.some(s => lower.includes(s))) {
+                    addLocalShape(standard);
+                    return;
+                }
+            }
+
+            addLog('未找到可绘制的图形，但已翻译', 'info');
+            speak('抱歉，我没有找到可以绘制的图形');
+        }
+
+        function addMultipleShapes(shapeTypes, originalText) {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const count = shapeTypes.length;
+            
+            // 查找位置关系
+            let insidePairs = [];  // [{inner: '鱼', outer: '水'}, ...]
+            let onTopPairs = [];   // [{top: '猫', bottom: '汽车', direction: 'left'}, ...]
+            let besidePairs = [];  // [{left: '猫', right: '汽车'}, ...]
+            let drawnShapes = new Set();
+            
+            // 检查内部关系
+            for (const innerShape of shapeTypes) {
+                if (POSITION_RULES.inside[innerShape]) {
+                    for (const outerShape of shapeTypes) {
+                        if (innerShape !== outerShape && POSITION_RULES.inside[innerShape].includes(outerShape)) {
+                            insidePairs.push({ inner: innerShape, outer: outerShape });
+                            drawnShapes.add(innerShape);
+                            drawnShapes.add(outerShape);
+                        }
+                    }
+                }
+            }
+            
+            // 检查上方关系（支持方位）
+            for (const topShape of shapeTypes) {
+                if (POSITION_RULES.onTop[topShape]) {
+                    for (const bottomShape of shapeTypes) {
+                        if (topShape !== bottomShape && POSITION_RULES.onTop[topShape].includes(bottomShape)) {
+                            if (!drawnShapes.has(topShape) || !drawnShapes.has(bottomShape)) {
+                                // 检测方位词 - 使用更精确的上下文
+                                const direction = detectDirectionWithContext(originalText, topShape, bottomShape);
+                                onTopPairs.push({ top: topShape, bottom: bottomShape, direction });
+                                drawnShapes.add(topShape);
+                                drawnShapes.add(bottomShape);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 检查旁边关系
+            for (const leftShape of shapeTypes) {
+                if (POSITION_RULES.beside[leftShape]) {
+                    for (const rightShape of shapeTypes) {
+                        if (leftShape !== rightShape && POSITION_RULES.beside[leftShape].includes(rightShape)) {
+                            if (!drawnShapes.has(leftShape) || !drawnShapes.has(rightShape)) {
+                                besidePairs.push({ left: leftShape, right: rightShape });
+                                drawnShapes.add(leftShape);
+                                drawnShapes.add(rightShape);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 计算分组位置
+            const totalGroups = insidePairs.length + onTopPairs.length + besidePairs.length;
+            const groupSpacing = totalGroups > 1 ? 200 : 0;
+            const startX = totalGroups > 1 ? centerX - ((totalGroups - 1) * groupSpacing) / 2 : centerX;
+            
+            let currentGroup = 0;
+            
+            // 处理内部关系（如鱼在水里）
+            for (const pair of insidePairs) {
+                // 检查画布上是否已存在外部形状
+                const existingOuter = shapes.find(s => s.type === pair.outer);
+                let groupX = startX + currentGroup * groupSpacing;
+                let groupY = centerY;
+                
+                if (existingOuter) {
+                    // 使用已存在的位置
+                    groupX = existingOuter.x;
+                    groupY = existingOuter.y;
+                    addLog(`找到已存在的${pair.outer}，使用其位置`, 'info');
+                } else {
+                    addLocalShapeAt(pair.outer, groupX, groupY);
+                }
+                const offsetY = -getShapeSize(pair.outer) * 0.1;
+                addLocalShapeAt(pair.inner, groupX, groupY + offsetY);
+                currentGroup++;
+            }
+            
+            // 处理上方关系（如猫在汽车的左边）
+            for (const pair of onTopPairs) {
+                // 检查画布上是否已存在底部形状
+                const existingBottom = shapes.find(s => s.type === pair.bottom);
+                let groupX = startX + currentGroup * groupSpacing;
+                let baseY = centerY;
+                
+                if (existingBottom) {
+                    // 使用已存在的位置
+                    groupX = existingBottom.x;
+                    baseY = existingBottom.y;
+                    addLog(`找到已存在的${pair.bottom}，在其${pair.direction}绘制${pair.top}`, 'info');
+                } else {
+                    // 如果底部形状不存在，先绘制它
+                    addLocalShapeAt(pair.bottom, groupX, baseY + 40);
+                    addLog(`绘制${pair.bottom}作为参考`, 'info');
+                }
+                
+                // 获取底部形状的实际位置（可能是刚绘制的）
+                const bottomShape = shapes.find(s => s.type === pair.bottom);
+                const bottomX = bottomShape ? bottomShape.x : groupX;
+                const bottomY = bottomShape ? bottomShape.y : baseY + 40;
+                
+                // 根据方位词调整位置
+                addLog(`绘制${pair.top} 在 ${pair.bottom} 的 ${pair.direction}`, 'info');
+                addLog(`底部位置: (${bottomX}, ${bottomY})`, 'info');
+                
+                if (pair.direction === 'left') {
+                    // 猫在汽车的左边
+                    addLocalShapeAt(pair.top, bottomX - 100, bottomY - 40);
+                    addLog(`绘制${pair.top} 在左边: (${bottomX - 100}, ${bottomY - 40})`, 'info');
+                } else if (pair.direction === 'right') {
+                    // 狗在汽车的右边
+                    addLocalShapeAt(pair.top, bottomX + 100, bottomY - 40);
+                    addLog(`绘制${pair.top} 在右边: (${bottomX + 100}, ${bottomY - 40})`, 'info');
+                } else if (pair.direction === 'front') {
+                    // 在前面
+                    addLocalShapeAt(pair.top, bottomX, bottomY - 80);
+                    addLog(`绘制${pair.top} 在前面: (${bottomX}, ${bottomY - 80})`, 'info');
+                } else {
+                    // 默认：在上方
+                    addLocalShapeAt(pair.top, bottomX, bottomY - 60);
+                    addLog(`绘制${pair.top} 在上方: (${bottomX}, ${bottomY - 60})`, 'info');
+                }
+                currentGroup++;
+            }
+            
+            // 处理旁边关系
+            for (const pair of besidePairs) {
+                const groupX = startX + currentGroup * groupSpacing;
+                addLocalShapeAt(pair.left, groupX - 80, centerY);
+                addLocalShapeAt(pair.right, groupX + 80, centerY);
+                currentGroup++;
+            }
+            
+            // 处理剩余未绘制的图形
+            const remainingShapes = shapeTypes.filter(s => !drawnShapes.has(s));
+            if (remainingShapes.length > 0) {
+                const radius = Math.min(canvas.width, canvas.height) / 4;
+                for (let i = 0; i < remainingShapes.length; i++) {
+                    const angle = (Math.PI * 2 / remainingShapes.length) * i - Math.PI / 2;
+                    const x = centerX + Math.cos(angle) * radius;
+                    const y = centerY + Math.sin(angle) * radius;
+                    addLocalShapeAt(remainingShapes[i], x, y);
+                }
+            }
+            
+            // 如果没有任何位置关系匹配，使用默认布局
+            if (drawnShapes.size === 0) {
+                let hasSun = false, hasMoon = false;
+                let sunIndex = -1, moonIndex = -1;
+                
+                for (let i = 0; i < count; i++) {
+                    if (shapeTypes[i] === '太阳') {
+                        hasSun = true;
+                        sunIndex = i;
+                    } else if (shapeTypes[i] === '月亮') {
+                        hasMoon = true;
+                        moonIndex = i;
+                    }
+                }
+                
+                if (count === 2 && hasSun) {
+                    const otherShape = shapeTypes[sunIndex === 0 ? 1 : 0];
+                    addLocalShapeAt('太阳', centerX, 150);
+                    addLocalShapeAt(otherShape, centerX, centerY + 50);
+                    return;
+                }
+                
+                if (count === 2 && hasMoon) {
+                    const otherShape = shapeTypes[moonIndex === 0 ? 1 : 0];
+                    addLocalShapeAt('月亮', centerX, 150);
+                    addLocalShapeAt(otherShape, centerX, centerY + 50);
+                    return;
+                }
+                
+                const radius = Math.min(canvas.width, canvas.height) / 4;
+                for (let i = 0; i < count; i++) {
+                    const angle = (Math.PI * 2 / count) * i - Math.PI / 2;
+                    const x = centerX + Math.cos(angle) * radius;
+                    const y = centerY + Math.sin(angle) * radius;
+                    addLocalShapeAt(shapeTypes[i], x, y);
+                }
+            }
+        }
+        
+        function detectDirection(text, targetShape, referenceShape) {
+            // 查找方位词的位置
+            const textLower = text.toLowerCase();
+            
+            // 提取所有方位词
+            let foundDirection = 'top'; // 默认在上方
+            
+            // 英文方位词映射
+            const ENGLISH_DIRECTIONS = {
+                'left': 'left', '右边': 'right', 'right': 'right',
+                'top': 'top', 'up': 'top', 'bottom': 'bottom', 'down': 'bottom',
+                'front': 'front', 'back': 'back'
+            };
+            
+            // 先检查英文方位词（翻译后）
+            for (const [word, direction] of Object.entries(ENGLISH_DIRECTIONS)) {
+                if (textLower.includes(word)) {
+                    foundDirection = direction;
+                    addLog(`检测到英文方位: ${word} -> ${direction}`, 'info');
+                    return foundDirection;
+                }
+            }
+            
+            // 获取目标形状和参考形状的所有同义词
+            const targetSynonyms = SHAPE_SYNONYMS[targetShape] || [targetShape];
+            const referenceSynonyms = SHAPE_SYNONYMS[referenceShape] || [referenceShape];
+            
+            // 再检查中文方位词
+            for (const [chinese, direction] of Object.entries(DIRECTION_WORDS)) {
+                if (textLower.includes(chinese)) {
+                    const idx = textLower.indexOf(chinese);
+                    const contextBefore = textLower.substring(Math.max(0, idx - 20), idx);
+                    const contextAfter = textLower.substring(idx + chinese.length, idx + chinese.length + 20);
+                    
+                    const hasTarget = targetSynonyms.some(syn => contextBefore.includes(syn) || contextAfter.includes(syn));
+                    const hasReference = referenceSynonyms.some(syn => contextBefore.includes(syn) || contextAfter.includes(syn));
+                    
+                    if (hasTarget && hasReference) {
+                        foundDirection = direction;
+                        addLog(`检测到中文方位: ${chinese} -> ${direction}`, 'info');
+                        return foundDirection;
+                    }
+                }
+            }
+            
+            addLog(`方位检测: ${targetShape} 在 ${referenceShape} 的 ${foundDirection}`, 'info');
+            
+            return foundDirection;
+        }
+        
+        function detectDirectionWithContext(text, targetShape, referenceShape) {
+            const textLower = text.toLowerCase();
+            
+            // 获取同义词
+            const targetSynonyms = SHAPE_SYNONYMS[targetShape] || [targetShape];
+            const referenceSynonyms = SHAPE_SYNONYMS[referenceShape] || [referenceShape];
+            
+            // 查找目标形状在文本中的位置
+            let targetPos = -1;
+            for (const syn of targetSynonyms) {
+                const pos = textLower.indexOf(syn);
+                if (pos !== -1) {
+                    targetPos = pos;
+                    break;
+                }
+            }
+            
+            // 查找参考形状在文本中的位置
+            let refPos = -1;
+            for (const syn of referenceSynonyms) {
+                const pos = textLower.indexOf(syn);
+                if (pos !== -1) {
+                    refPos = pos;
+                    break;
+                }
+            }
+            
+            // 如果找不到目标或参考，返回默认值
+            if (targetPos === -1 || refPos === -1) {
+                addLog(`无法找到目标(${targetShape})或参考(${referenceShape})的位置`, 'info');
+                return 'top';
+            }
+            
+            // 先检查参考形状附近的方位词（方位词通常在参考形状后面，如"狗在车右边"）
+            const contextAfterRef = textLower.substring(refPos, refPos + 20);
+            
+            // 中文方位词
+            for (const [chinese, direction] of Object.entries(DIRECTION_WORDS)) {
+                if (contextAfterRef.includes(chinese)) {
+                    addLog(`精确检测: ${targetShape} 在 ${referenceShape} 的 ${chinese}(${direction})`, 'info');
+                    return direction;
+                }
+            }
+            
+            // 英文方位词
+            const ENGLISH_DIRECTIONS = {
+                'left': 'left', 'right': 'right',
+                'top': 'top', 'up': 'top', 'bottom': 'bottom', 'down': 'bottom',
+                'front': 'front', 'back': 'back'
+            };
+            
+            for (const [word, direction] of Object.entries(ENGLISH_DIRECTIONS)) {
+                if (contextAfterRef.includes(word)) {
+                    addLog(`精确检测: ${targetShape} 在 ${referenceShape} 的 ${word}(${direction})`, 'info');
+                    return direction;
+                }
+            }
+            
+            // 如果参考形状后面没找到，检查目标形状和参考形状之间的文本
+            const startPos = Math.min(targetPos, refPos);
+            const endPos = Math.max(targetPos, refPos);
+            const textBetween = textLower.substring(startPos, endPos);
+            
+            for (const [chinese, direction] of Object.entries(DIRECTION_WORDS)) {
+                if (textBetween.includes(chinese)) {
+                    addLog(`精确检测(中间): ${targetShape} 在 ${referenceShape} 的 ${chinese}(${direction})`, 'info');
+                    return direction;
+                }
+            }
+            
+            for (const [word, direction] of Object.entries(ENGLISH_DIRECTIONS)) {
+                if (textBetween.includes(word)) {
+                    addLog(`精确检测(中间): ${targetShape} 在 ${referenceShape} 的 ${word}(${direction})`, 'info');
+                    return direction;
+                }
+            }
+            
+            // 如果没有找到，检查整个文本中与这个图形对相关的方位词
+            return detectDirection(text, targetShape, referenceShape);
+        }
+        
+        function getShapeSize(shapeType) {
+            const sizeMap = {
+                '圆': 40, '矩形': 60, '线': 100, '三角形': 80, '椭圆': 60,
+                '星星': 80, '五边形': 70, '心形': 40, '十字': 60,
+                '太阳': 60, '月亮': 50, '房子': 70, '树': 80,
+                '彩虹': 100, '钻石': 50, '箭头': 50, '波浪': 80,
+                '猫': 40, '狗': 45, '鸟': 35, '鱼': 40, '蝴蝶': 50,
+                '兔子': 50, '熊猫': 60, '蜜蜂': 40, '花朵': 50,
+                '云朵': 70, '雪人': 60, '气球': 40, '礼物': 50,
+                '汽车': 80, '飞机': 70, '船': 80, '火车': 100,
+                '山': 100, '河': 120, '湖': 80, '水': 100, '大海': 150,
+                '杯子': 50, '雨伞': 60, '书本': 60, '帽子': 50,
+                '老虎': 60, '狮子': 60, '马': 70, '青蛙': 40,
+                '蛇': 80, '企鹅': 50, '海豚': 60, '乌龟': 50,
+            };
+            return sizeMap[shapeType] || 50;
+        }
+
+        function addLocalShapeAt(type, x, y) {
+            let shape = { type, x, y, color: currentColor, strokeWidth };
+
+            switch (type) {
+                case '圆': shape.radius = 40; break;
+                case '矩形': shape.width = 80; shape.height = 60; break;
+                case '线': shape.length = 100; break;
+                case '三角形': shape.size = 80; break;
+                case '椭圆': shape.radiusX = 60; shape.radiusY = 35; break;
+                case '星星': shape.size = 80; break;
+                case '五边形': shape.size = 70; break;
+                case '心形': shape.size = 40; break;
+                case '十字': shape.size = 60; break;
+                case '太阳': shape.size = 80; break;
+                case '月亮': shape.size = 60; break;
+                case '房子': shape.size = 100; break;
+                case '树': shape.size = 100; break;
+                case '彩虹': shape.size = 120; break;
+                case '钻石': shape.size = 60; break;
+                case '箭头': shape.size = 80; break;
+                case '波浪': shape.size = 100; break;
+                case '猫': shape.size = 60; break;
+                case '狗': shape.size = 60; break;
+                case '鸟': shape.size = 50; break;
+                case '鱼': shape.size = 50; break;
+                case '蝴蝶': shape.size = 60; break;
+                case '兔子': shape.size = 50; break;
+                case '熊猫': shape.size = 60; break;
+                case '蜜蜂': shape.size = 40; break;
+                case '花朵': shape.size = 50; break;
+                case '云朵': shape.size = 70; break;
+                case '雪人': shape.size = 60; break;
+                case '气球': shape.size = 40; break;
+                case '礼物': shape.size = 50; break;
+                case '汽车': shape.size = 80; break;
+                case '飞机': shape.size = 70; break;
+                case '船': shape.size = 80; break;
+                case '火车': shape.size = 100; break;
+                case '山': shape.size = 100; break;
+                case '河': shape.size = 120; break;
+                case '湖': shape.size = 80; break;
+                case '水': shape.size = 100; break;
+                case '风景': shape.size = 200; break;
+                case '天空': shape.size = 180; break;
+                case '杯子': shape.size = 50; break;
+                case '雨伞': shape.size = 60; break;
+                case '书本': shape.size = 60; break;
+                case '帽子': shape.size = 50; break;
+                case '老虎': shape.size = 60; break;
+                case '狮子': shape.size = 60; break;
+                case '马': shape.size = 70; break;
+                case '青蛙': shape.size = 40; break;
+                case '蛇': shape.size = 80; break;
+                case '企鹅': shape.size = 50; break;
+                case '海豚': shape.size = 60; break;
+                case '乌龟': shape.size = 50; break;
+            }
+
+            shapes.push(shape);
+            aiImage.style.display = 'none';
+            canvas.style.display = 'block';
+            redrawLocal();
+            addLog(`绘制了${type}`, 'success');
+            speak(`画了一个${type}`);
+        }
+
+        function addLocalShape(type) {
+            const padding = 50;
+            const x = padding + Math.random() * (canvas.width - padding * 2);
+            const y = padding + Math.random() * (canvas.height - padding * 2);
+
+            let shape = { type, x, y, color: currentColor, strokeWidth };
+
+            switch (type) {
+                case '圆': shape.radius = 40; break;
+                case '矩形': shape.width = 80; shape.height = 60; break;
+                case '线': shape.length = 100; break;
+                case '三角形': shape.size = 80; break;
+                case '椭圆': shape.radiusX = 60; shape.radiusY = 35; break;
+                case '星星': shape.size = 80; break;
+                case '五边形': shape.size = 70; break;
+                case '心形': shape.size = 40; break;
+                case '十字': shape.size = 60; break;
+                case '太阳': shape.size = 80; break;
+                case '月亮': shape.size = 60; break;
+                case '房子': shape.size = 100; break;
+                case '树': shape.size = 100; break;
+                case '彩虹': shape.size = 120; break;
+                case '钻石': shape.size = 60; break;
+                case '箭头': shape.size = 80; break;
+                case '波浪': shape.size = 100; break;
+                // 动物和新图形
+                case '猫': shape.size = 60; break;
+                case '狗': shape.size = 60; break;
+                case '鸟': shape.size = 50; break;
+                case '鱼': shape.size = 50; break;
+                case '蝴蝶': shape.size = 60; break;
+                case '兔子': shape.size = 50; break;
+                case '熊猫': shape.size = 60; break;
+                case '蜜蜂': shape.size = 40; break;
+                case '花朵': shape.size = 50; break;
+                case '云朵': shape.size = 70; break;
+                case '雪人': shape.size = 60; break;
+                case '气球': shape.size = 40; break;
+                case '礼物': shape.size = 50; break;
+                case '汽车': shape.size = 80; break;
+                case '飞机': shape.size = 70; break;
+                case '船': shape.size = 80; break;
+                case '火车': shape.size = 100; break;
+                case '山': shape.size = 100; break;
+                case '河': shape.size = 120; break;
+                case '湖': shape.size = 80; break;
+                case '水': shape.size = 100; break;
+                case '风景': shape.size = 200; break;
+                case '天空': shape.size = 180; break;
+                case '杯子': shape.size = 50; break;
+                case '雨伞': shape.size = 60; break;
+                case '书本': shape.size = 60; break;
+                case '帽子': shape.size = 50; break;
+                case '老虎': shape.size = 60; break;
+                case '狮子': shape.size = 60; break;
+                case '马': shape.size = 70; break;
+                case '青蛙': shape.size = 40; break;
+                case '蛇': shape.size = 80; break;
+                case '企鹅': shape.size = 50; break;
+                case '海豚': shape.size = 60; break;
+                case '乌龟': shape.size = 50; break;
+            }
+
+            shapes.push(shape);
+            aiImage.style.display = 'none';
+            canvas.style.display = 'block';
+            redrawLocal();
+            addLog(`绘制了${type}`, 'success');
+            speak(`画了一个${type}`);
+        }
+
+        function redrawLocal() {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            shapes.forEach(shape => {
+                ctx.strokeStyle = shape.color;
+                ctx.lineWidth = shape.strokeWidth;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                switch (shape.type) {
+                    case '圆':
+                        ctx.beginPath();
+                        ctx.arc(shape.x, shape.y, shape.radius, 0, Math.PI * 2);
+                        ctx.stroke();
+                        break;
+                    case '矩形':
+                        ctx.strokeRect(shape.x - shape.width/2, shape.y - shape.height/2, shape.width, shape.height);
+                        break;
+                    case '线':
+                        ctx.beginPath();
+                        ctx.moveTo(shape.x, shape.y);
+                        ctx.lineTo(shape.x + shape.length, shape.y);
+                        ctx.stroke();
+                        break;
+                    case '三角形':
+                        ctx.beginPath();
+                        ctx.moveTo(shape.x, shape.y - shape.size/2);
+                        ctx.lineTo(shape.x - shape.size/2, shape.y + shape.size/2);
+                        ctx.lineTo(shape.x + shape.size/2, shape.y + shape.size/2);
+                        ctx.closePath();
+                        ctx.stroke();
+                        break;
+                    case '椭圆':
+                        ctx.beginPath();
+                        ctx.ellipse(shape.x, shape.y, shape.radiusX, shape.radiusY, 0, 0, Math.PI * 2);
+                        ctx.stroke();
+                        break;
+                    case '星星':
+                        drawStar(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '五边形':
+                        drawPolygon(ctx, shape.x, shape.y, shape.size, 5);
+                        break;
+                    case '心形':
+                        drawHeart(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '十字':
+                        drawCross(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '太阳':
+                        drawSun(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '月亮':
+                        drawMoon(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '房子':
+                        drawHouse(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '树':
+                        drawTree(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '彩虹':
+                        drawRainbow(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '钻石':
+                        drawDiamond(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '箭头':
+                        drawArrow(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '波浪':
+                        drawWave(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    // 动物和新图形
+                    case '猫':
+                        drawCat(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '狗':
+                        drawDog(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '鸟':
+                        drawBird(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '鱼':
+                        drawFish(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '蝴蝶':
+                        drawButterfly(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '兔子':
+                        drawRabbit(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '熊猫':
+                        drawPanda(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '蜜蜂':
+                        drawBee(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '花朵':
+                        drawFlower(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '云朵':
+                        drawCloud(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '雪人':
+                        drawSnowman(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '气球':
+                        drawBalloon(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '礼物':
+                        drawGift(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '汽车':
+                        drawCar(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '飞机':
+                        drawAirplane(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '船':
+                        drawShip(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '火车':
+                        drawTrain(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '山':
+                        drawMountain(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '河':
+                        drawRiver(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '湖':
+                        drawLake(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '水':
+                        drawLake(ctx, shape.x, shape.y, shape.size); // 用湖的形状表示水
+                        break;
+                    case '大海':
+                        drawLake(ctx, shape.x, shape.y, shape.size * 1.5); // 用更大的湖表示大海
+                        break;
+                    case '风景':
+                        drawScenery(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '天空':
+                        drawSky(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '杯子':
+                        drawCup(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '雨伞':
+                        drawUmbrella(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '书本':
+                        drawBook(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '帽子':
+                        drawHat(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '老虎':
+                        drawTiger(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '狮子':
+                        drawLion(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '马':
+                        drawHorse(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '青蛙':
+                        drawFrog(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '蛇':
+                        drawSnake(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '企鹅':
+                        drawPenguin(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '海豚':
+                        drawDolphin(ctx, shape.x, shape.y, shape.size);
+                        break;
+                    case '乌龟':
+                        drawTurtle(ctx, shape.x, shape.y, shape.size);
+                        break;
+                }
+            });
+        }
+
+        function drawStar(ctx, cx, cy, size) {
+            const outer = size / 2, inner = size / 4;
+            ctx.beginPath();
+            for (let i = 0; i < 5; i++) {
+                const angle1 = (Math.PI * 2 / 5) * i - Math.PI / 2;
+                const angle2 = angle1 + Math.PI / 5;
+                ctx.lineTo(cx + Math.cos(angle1) * outer, cy + Math.sin(angle1) * outer);
+                ctx.lineTo(cx + Math.cos(angle2) * inner, cy + Math.sin(angle2) * inner);
+            }
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        function drawPolygon(ctx, cx, cy, size, sides) {
+            ctx.beginPath();
+            for (let i = 0; i < sides; i++) {
+                const angle = (Math.PI * 2 / sides) * i - Math.PI / 2;
+                const x = cx + Math.cos(angle) * size / 2;
+                const y = cy + Math.sin(angle) * size / 2;
+                i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        function drawHeart(ctx, cx, cy, size) {
+            const s = size;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy + s * 0.3);
+            ctx.bezierCurveTo(cx - s, cy - s * 0.3, cx - s * 1.2, cy + s * 0.2, cx, cy + s * 0.5);
+            ctx.bezierCurveTo(cx + s * 1.2, cy + s * 0.2, cx + s, cy - s * 0.3, cx, cy + s * 0.3);
+            ctx.stroke();
+        }
+
+        function drawCross(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.moveTo(cx - s, cy);
+            ctx.lineTo(cx + s, cy);
+            ctx.moveTo(cx, cy - s);
+            ctx.lineTo(cx, cy + s);
+            ctx.stroke();
+        }
+
+        function drawSun(ctx, cx, cy, size) {
+            const r = size / 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r * 0.7, 0, Math.PI * 2);
+            ctx.stroke();
+            for (let i = 0; i < 12; i++) {
+                const angle = Math.PI * 2 / 12 * i;
+                const x1 = cx + Math.cos(angle) * r * 0.8;
+                const y1 = cy + Math.sin(angle) * r * 0.8;
+                const x2 = cx + Math.cos(angle) * r;
+                const y2 = cy + Math.sin(angle) * r;
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            }
+        }
+
+        function drawMoon(ctx, cx, cy, size) {
+            const r = size / 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx + r * 0.3, cy - r * 0.2, r * 0.7, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        function drawHouse(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.strokeRect(cx - s * 0.6, cy, s * 1.2, s * 0.8);
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.8, cy);
+            ctx.lineTo(cx, cy - s * 0.6);
+            ctx.lineTo(cx + s * 0.8, cy);
+            ctx.closePath();
+            ctx.stroke();
+            ctx.strokeRect(cx - s * 0.15, cy + s * 0.3, s * 0.3, s * 0.5);
+            ctx.strokeRect(cx + s * 0.3, cy + s * 0.15, s * 0.25, s * 0.25);
+        }
+
+        function drawTree(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.strokeRect(cx - s * 0.1, cy, s * 0.2, s * 0.6);
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - s * 0.8);
+            ctx.lineTo(cx - s * 0.5, cy);
+            ctx.lineTo(cx + s * 0.5, cy);
+            ctx.closePath();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - s * 0.5);
+            ctx.lineTo(cx - s * 0.35, cy - s * 0.1);
+            ctx.lineTo(cx + s * 0.35, cy - s * 0.1);
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        function drawRainbow(ctx, cx, cy, size) {
+            const r = size;
+            const colors = ['#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3'];
+            for (let i = 0; i < colors.length; i++) {
+                ctx.strokeStyle = colors[i];
+                ctx.lineWidth = 8;
+                ctx.beginPath();
+                ctx.arc(cx, cy, r - i * 12, Math.PI, 0);
+                ctx.stroke();
+            }
+            ctx.lineWidth = strokeWidth;
+            ctx.strokeStyle = currentColor;
+        }
+
+        function drawDiamond(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - s);
+            ctx.lineTo(cx + s, cy);
+            ctx.lineTo(cx, cy + s);
+            ctx.lineTo(cx - s, cy);
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        function drawArrow(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.moveTo(cx - s, cy);
+            ctx.lineTo(cx + s * 0.6, cy);
+            ctx.moveTo(cx + s * 0.6, cy);
+            ctx.lineTo(cx + s * 0.3, cy - s * 0.3);
+            ctx.moveTo(cx + s * 0.6, cy);
+            ctx.lineTo(cx + s * 0.3, cy + s * 0.3);
+            ctx.stroke();
+        }
+
+        function drawWave(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.moveTo(cx - s, cy);
+            for (let i = 0; i < 5; i++) {
+                const x = cx - s + i * (s / 2);
+                ctx.quadraticCurveTo(x + s / 4, cy - s / 4, x + s / 2, cy);
+            }
+            ctx.stroke();
+        }
+
+        function drawCat(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, s * 0.6, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx - s * 0.35, cy - s * 0.3, s * 0.15, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx + s * 0.35, cy - s * 0.3, s * 0.15, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.15, cy + s * 0.1);
+            ctx.lineTo(cx, cy + s * 0.25);
+            ctx.lineTo(cx + s * 0.15, cy + s * 0.1);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.4, cy - s * 0.4);
+            ctx.lineTo(cx - s * 0.5, cy - s * 0.6);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx + s * 0.4, cy - s * 0.4);
+            ctx.lineTo(cx + s * 0.5, cy - s * 0.6);
+            ctx.stroke();
+        }
+
+        function drawDog(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, s * 0.5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.3, cy - s * 0.4);
+            ctx.lineTo(cx - s * 0.4, cy - s * 0.7);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx + s * 0.3, cy - s * 0.4);
+            ctx.lineTo(cx + s * 0.4, cy - s * 0.7);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.ellipse(cx - s * 0.5, cy + s * 0.2, s * 0.2, s * 0.3, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.ellipse(cx + s * 0.5, cy + s * 0.2, s * 0.2, s * 0.3, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.1, cy + s * 0.1);
+            ctx.lineTo(cx, cy + s * 0.25);
+            ctx.lineTo(cx + s * 0.1, cy + s * 0.1);
+            ctx.stroke();
+        }
+
+        function drawBird(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, s * 0.3, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx + s * 0.3, cy);
+            ctx.lineTo(cx + s * 0.7, cy);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx - s * 0.4, cy - s * 0.3, s * 0.25, Math.PI, 0);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx - s * 0.4, cy + s * 0.3, s * 0.25, 0, Math.PI);
+            ctx.stroke();
+        }
+
+        function drawFish(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, s * 0.4, s * 0.25, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx + s * 0.4, cy);
+            ctx.lineTo(cx + s * 0.7, cy - s * 0.15);
+            ctx.lineTo(cx + s * 0.7, cy + s * 0.15);
+            ctx.closePath();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.2, cy - s * 0.05);
+            ctx.lineTo(cx - s * 0.15, cy - s * 0.15);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.05, cy - s * 0.05);
+            ctx.lineTo(cx, cy - s * 0.15);
+            ctx.stroke();
+        }
+
+        function drawButterfly(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, s * 0.1, s * 0.4, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx - s * 0.3, cy - s * 0.1, s * 0.25, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx + s * 0.3, cy - s * 0.1, s * 0.25, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx - s * 0.3, cy + s * 0.1, s * 0.2, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx + s * 0.3, cy + s * 0.1, s * 0.2, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        function drawRabbit(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy + s * 0.2, s * 0.4, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.ellipse(cx - s * 0.15, cy - s * 0.3, s * 0.1, s * 0.4, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.ellipse(cx + s * 0.15, cy - s * 0.3, s * 0.1, s * 0.4, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.1, cy + s * 0.3);
+            ctx.lineTo(cx, cy + s * 0.45);
+            ctx.lineTo(cx + s * 0.1, cy + s * 0.3);
+            ctx.stroke();
+        }
+
+        function drawPanda(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, s * 0.5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.ellipse(cx - s * 0.25, cy - s * 0.1, s * 0.15, s * 0.12, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.ellipse(cx + s * 0.25, cy - s * 0.1, s * 0.15, s * 0.12, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx - s * 0.25, cy - s * 0.1, s * 0.05, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx + s * 0.25, cy - s * 0.1, s * 0.05, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx, cy + s * 0.15, s * 0.1, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        function drawBee(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, s * 0.25, s * 0.15, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.2, cy - s * 0.15);
+            ctx.lineTo(cx - s * 0.15, cy - s * 0.35);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx + s * 0.2, cy - s * 0.15);
+            ctx.lineTo(cx + s * 0.15, cy - s * 0.35);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx - s * 0.35, cy - s * 0.35, s * 0.15, Math.PI, 0);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx + s * 0.35, cy - s * 0.35, s * 0.15, Math.PI, 0);
+            ctx.stroke();
+        }
+
+        function drawFlower(ctx, cx, cy, size) {
+            const s = size / 2;
+            for (let i = 0; i < 5; i++) {
+                const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
+                ctx.beginPath();
+                ctx.ellipse(cx + Math.cos(angle) * s * 0.4, cy + Math.sin(angle) * s * 0.4, s * 0.2, s * 0.35, angle, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            ctx.beginPath();
+            ctx.arc(cx, cy, s * 0.15, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        function drawCloud(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.arc(cx - s * 0.4, cy, s * 0.35, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx, cy - s * 0.2, s * 0.4, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx + s * 0.4, cy, s * 0.35, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx - s * 0.2, cy + s * 0.15, s * 0.25, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx + s * 0.2, cy + s * 0.15, s * 0.25, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        function drawSnowman(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy + s * 0.5, s * 0.35, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx, cy, s * 0.25, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx, cy - s * 0.35, s * 0.18, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx - s * 0.08, cy - s * 0.4, s * 0.03, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx + s * 0.08, cy - s * 0.4, s * 0.03, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.03, cy - s * 0.25);
+            ctx.lineTo(cx, cy - s * 0.18);
+            ctx.lineTo(cx + s * 0.03, cy - s * 0.25);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.15, cy - s * 0.1);
+            ctx.lineTo(cx - s * 0.35, cy - s * 0.05);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx + s * 0.15, cy - s * 0.1);
+            ctx.lineTo(cx + s * 0.35, cy - s * 0.05);
+            ctx.stroke();
+        }
+
+        function drawBalloon(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy - s * 0.2, s * 0.35, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.1, cy + s * 0.15);
+            ctx.lineTo(cx, cy + s * 0.3);
+            ctx.lineTo(cx + s * 0.1, cy + s * 0.15);
+            ctx.closePath();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx, cy + s * 0.3);
+            ctx.lineTo(cx, cy + s * 0.6);
+            ctx.stroke();
+        }
+
+        function drawGift(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.strokeRect(cx - s * 0.4, cy - s * 0.35, s * 0.8, s * 0.7);
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - s * 0.45);
+            ctx.lineTo(cx, cy + s * 0.35);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.5, cy);
+            ctx.lineTo(cx + s * 0.5, cy);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - s * 0.45);
+            ctx.lineTo(cx - s * 0.2, cy - s * 0.6);
+            ctx.lineTo(cx + s * 0.2, cy - s * 0.6);
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        function drawCar(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.strokeRect(cx - s * 0.6, cy - s * 0.25, s * 1.2, s * 0.5);
+            ctx.beginPath();
+            ctx.arc(cx - s * 0.35, cy + s * 0.25, s * 0.15, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx + s * 0.35, cy + s * 0.25, s * 0.15, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        function drawAirplane(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.8, cy);
+            ctx.lineTo(cx + s * 0.6, cy);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.2, cy - s * 0.5);
+            ctx.lineTo(cx, cy);
+            ctx.lineTo(cx + s * 0.2, cy - s * 0.5);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + s * 0.2, cy + s * 0.35);
+            ctx.stroke();
+        }
+
+        function drawShip(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.8, cy + s * 0.2);
+            ctx.lineTo(cx - s * 0.8, cy + s * 0.5);
+            ctx.lineTo(cx + s * 0.8, cy + s * 0.5);
+            ctx.lineTo(cx + s * 0.6, cy + s * 0.2);
+            ctx.closePath();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.3, cy + s * 0.2);
+            ctx.lineTo(cx - s * 0.3, cy - s * 0.3);
+            ctx.lineTo(cx + s * 0.3, cy - s * 0.3);
+            ctx.lineTo(cx + s * 0.3, cy + s * 0.2);
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        function drawTrain(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.strokeRect(cx - s * 0.8, cy - s * 0.3, s * 0.7, s * 0.6);
+            ctx.strokeRect(cx + s * 0.1, cy - s * 0.3, s * 0.7, s * 0.6);
+            ctx.beginPath();
+            ctx.arc(cx - s * 0.5, cy + s * 0.3, s * 0.12, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx + s * 0.15, cy + s * 0.3, s * 0.12, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx + s * 0.8, cy + s * 0.3, s * 0.12, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        function drawMountain(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.moveTo(cx - s, cy + s * 0.3);
+            ctx.lineTo(cx, cy - s);
+            ctx.lineTo(cx + s, cy + s * 0.3);
+            ctx.closePath();
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.6, cy + s * 0.3);
+            ctx.lineTo(cx - s * 0.2, cy - s * 0.4);
+            ctx.lineTo(cx + s * 0.2, cy + s * 0.3);
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        function drawRiver(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.moveTo(cx - s, cy);
+            ctx.quadraticCurveTo(cx - s * 0.5, cy - s * 0.3, cx, cy);
+            ctx.quadraticCurveTo(cx + s * 0.5, cy + s * 0.3, cx + s, cy);
+            ctx.stroke();
+        }
+
+        function drawLake(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, s * 0.8, s * 0.5, 0, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        function drawCup(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.strokeRect(cx - s * 0.35, cy - s * 0.4, s * 0.7, s * 0.6);
+            ctx.beginPath();
+            ctx.arc(cx, cy - s * 0.4, s * 0.35, Math.PI, 0);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx + s * 0.35, cy - s * 0.2);
+            ctx.lineTo(cx + s * 0.55, cy - s * 0.3);
+            ctx.stroke();
+        }
+
+        function drawUmbrella(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy - s * 0.3, s * 0.7, Math.PI, 0);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - s * 0.3);
+            ctx.lineTo(cx, cy + s * 0.6);
+            ctx.stroke();
+        }
+
+        function drawBook(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.strokeRect(cx - s * 0.5, cy - s * 0.35, s, s * 0.7);
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - s * 0.35);
+            ctx.lineTo(cx, cy + s * 0.35);
+            ctx.stroke();
+        }
+
+        function drawHat(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.strokeRect(cx - s * 0.5, cy - s * 0.1, s, s * 0.2);
+            ctx.beginPath();
+            ctx.arc(cx, cy + s * 0.2, s * 0.5, Math.PI, 0);
+            ctx.stroke();
+        }
+
+        function drawTiger(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, s * 0.5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.6, cy - s * 0.1);
+            ctx.lineTo(cx - s * 0.8, cy - s * 0.3);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx + s * 0.6, cy - s * 0.1);
+            ctx.lineTo(cx + s * 0.8, cy - s * 0.3);
+            ctx.stroke();
+        }
+
+        function drawLion(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.arc(cx, cy, s * 0.5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx, cy - s * 0.5, s * 0.4, Math.PI, 0);
+            ctx.stroke();
+        }
+
+        function drawHorse(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.arc(cx - s * 0.3, cy - s * 0.3, s * 0.25, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.1, cy - s * 0.3);
+            ctx.lineTo(cx + s * 0.3, cy);
+            ctx.lineTo(cx + s * 0.4, cy + s * 0.3);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx + s * 0.3, cy);
+            ctx.lineTo(cx + s * 0.5, cy - s * 0.4);
+            ctx.stroke();
+        }
+
+        function drawFrog(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, s * 0.4, s * 0.3, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx - s * 0.2, cy - s * 0.15, s * 0.12, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx + s * 0.2, cy - s * 0.15, s * 0.12, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        function drawSnake(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.moveTo(cx - s, cy);
+            ctx.quadraticCurveTo(cx - s * 0.5, cy - s * 0.4, cx, cy - s * 0.2);
+            ctx.quadraticCurveTo(cx + s * 0.5, cy, cx + s, cy - s * 0.3);
+            ctx.stroke();
+        }
+
+        function drawPenguin(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, s * 0.25, s * 0.4, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx, cy - s * 0.35, s * 0.2, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        function drawDolphin(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.8, cy);
+            ctx.quadraticCurveTo(cx - s * 0.3, cy - s * 0.3, cx + s * 0.5, cy - s * 0.2);
+            ctx.quadraticCurveTo(cx + s * 0.8, cy, cx + s * 0.6, cy + s * 0.2);
+            ctx.lineTo(cx - s * 0.5, cy + s * 0.15);
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        function drawTurtle(ctx, cx, cy, size) {
+            const s = size / 2;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, s * 0.4, s * 0.3, 0, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(cx, cy - s * 0.1, s * 0.3, 0, Math.PI);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - s * 0.5, cy + s * 0.1);
+            ctx.lineTo(cx - s * 0.7, cy + s * 0.2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx + s * 0.5, cy + s * 0.1);
+            ctx.lineTo(cx + s * 0.7, cy + s * 0.2);
+            ctx.stroke();
+        }
+
+        function drawScenery(ctx, cx, cy, size) {
+            const s = Math.min(size / 2, 150); // 限制最大尺寸
+            
+            console.log(`[Scenery] cx=${cx}, cy=${cy}, size=${size}, s=${s}`);
+            
+            // 确保使用正确的颜色和线宽
+            ctx.strokeStyle = currentColor;
+            ctx.lineWidth = strokeWidth;
+            
+            // 太阳在左上角
+            drawSun(ctx, cx - s * 0.6, cy - s * 0.4, s * 0.4);
+            // 云朵在右上角
+            drawCloud(ctx, cx + s * 0.4, cy - s * 0.3, s * 0.3);
+            // 山在中间下方
+            drawMountain(ctx, cx, cy + s * 0.3, s * 0.8);
+            // 树在山的两侧
+            drawTree(ctx, cx - s * 0.5, cy + s * 0.3, s * 0.3);
+            drawTree(ctx, cx + s * 0.5, cy + s * 0.3, s * 0.3);
+        }
+
+        function drawSky(ctx, cx, cy, size) {
+            const s = size / 2;
+            drawSun(ctx, cx, cy - s * 0.3, s * 0.6);
+            drawCloud(ctx, cx - s * 0.6, cy - s * 0.2, s * 0.5);
+            drawCloud(ctx, cx + s * 0.5, cy, s * 0.4);
+        }
+
+        function clearCanvas() {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            shapes = [];
+            aiImage.style.display = 'none';
+            canvas.style.display = 'block';
+            canvasHint.classList.remove('hide');
+            addLog('画布已清空', 'success');
+        }
+
+        function undo() {
+            if (shapes.length === 0) {
+                addLog('没有可撤销的图形', 'error');
+                speak('没有可撤销的图形');
+                return;
+            }
+            shapes.pop();
+            redrawLocal();
+            addLog('已撤销', 'success');
+            speak('已撤销');
+        }
+
+        function addLog(text, type = 'info') {
+            const item = document.createElement('div');
+            item.className = `log-item ${type}`;
+            item.textContent = text;
+            logContainer.prepend(item);
+            
+            if (logContainer.children.length > 50) {
+                logContainer.removeChild(logContainer.lastChild);
+            }
+        }
+
+        function speak(text) {
+            if (!synth) return;
+            
+            synth.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'zh-CN';
+            utterance.rate = 0.9;
+            synth.speak(utterance);
+        }
+
+        function hideCanvasHint() {
+            canvasHint.classList.add('hide');
+        }
+
+        // 启动
+        init();
+    </script>
+</body>
+</html>

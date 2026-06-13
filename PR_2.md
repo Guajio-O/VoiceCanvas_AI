@@ -75,17 +75,17 @@ const POSITION_RULES = {
 
 ### 核心修改点
 
-1. **方位检测优化**（[index.html#L1395-1474](file:///C:/Users/13517/Desktop/AI%20Voice%20painting/index.html#L1395-1474)）：
+1. **方位检测优化**（[voicecanvas-ai.html#L1395-1474](file:///C:/Users/13517/Desktop/AI%20Voice%20painting/voicecanvas-ai.html#L1395-1474)）：
    - 新增 `detectDirectionWithContext()` 函数
    - 优先检查参考形状后面的方位词（如"狗在车右边"中"右边"在"车"之后）
    - 支持中英文方位词识别
 
-2. **增量绘制逻辑**（[index.html#L1156-1284](file:///C:/Users/13517/Desktop/AI%20Voice%20painting/index.html#L1156-1284)）：
+2. **增量绘制逻辑**（[voicecanvas-ai.html#L1156-1284](file:///C:/Users/13517/Desktop/AI%20Voice%20painting/voicecanvas-ai.html#L1156-1284)）：
    - 检查画布已有图形位置
    - 支持"内部"、"上方"、"旁边"三种位置关系
    - 根据方位词精确计算绘制坐标
 
-3. **位置规则扩展**（[index.html#L957-986](file:///C:/Users/13517/Desktop/AI%20Voice%20painting/index.html#L957-986)）：
+3. **位置规则扩展**（[voicecanvas-ai.html#L957-986](file:///C:/Users/13517/Desktop/AI%20Voice%20painting/voicecanvas-ai.html#L957-986)）：
    - 定义动物与交通工具、自然场景的位置关系
    - 支持鱼在水中、鸟在树上等常识性位置逻辑
 
@@ -156,7 +156,7 @@ if (pair.direction === 'left') {
 
 ## 相关文件
 
-- `index.html` - 主应用文件，包含位置关系处理逻辑
+- `voicecanvas-ai.html` - 主应用文件，包含位置关系处理逻辑
 - `DESIGN.md` - 更新设计文档，记录新功能
 - `PR_1.md` - 前序PR，翻译和关键词提取功能
 

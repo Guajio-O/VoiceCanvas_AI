@@ -113,7 +113,7 @@ const server = http.createServer((req, res) => {
     // 静态文件服务
     let filePath = '.' + req.url;
     if (filePath === './') {
-        filePath = './index.html';
+        filePath = './voicecanvas-ai.html';
     }
 
     const extname = path.extname(filePath);

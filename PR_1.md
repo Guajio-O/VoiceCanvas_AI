@@ -74,7 +74,7 @@ feat(local): 本地模式添加翻译和关键词提取功能
 
 ### 核心修改点
 
-1. **新增翻译字典**（[index.html#L336-391](file:///C:/Users/13517/Desktop/AI%20Voice%20painting/index.html#L336-391)）：
+1. **新增翻译字典**（[voicecanvas-ai.html#L336-391](file:///C:/Users/13517/Desktop/AI%20Voice%20painting/voicecanvas-ai.html#L336-391)）：
    ```javascript
    const TRANSLATION_DICT = {
        // 动词
@@ -84,14 +84,14 @@ feat(local): 本地模式添加翻译和关键词提取功能
    };
    ```
 
-2. **新增关键词列表**（[index.html#L393-404](file:///C:/Users/13517/Desktop/AI%20Voice%20painting/index.html#L393-404)）：
+2. **新增关键词列表**（[voicecanvas-ai.html#L393-404](file:///C:/Users/13517/Desktop/AI%20Voice%20painting/voicecanvas-ai.html#L393-404)）：
    ```javascript
    const VERBS = ['画', '画一个', '绘制', ...];
    const NOUNS_SHAPES = ['圆', '矩形', '三角形', ...];
    const NOUNS_COLORS = ['红色', '蓝色', '绿色', ...];
    ```
 
-3. **新增翻译函数**（[index.html#L789-797](file:///C:/Users/13517/Desktop/AI%20Voice%20painting/index.html#L789-797)）：
+3. **新增翻译函数**（[voicecanvas-ai.html#L789-797](file:///C:/Users/13517/Desktop/AI%20Voice%20painting/voicecanvas-ai.html#L789-797)）：
    ```javascript
    function translateText(text) {
        let result = text;
@@ -103,7 +103,7 @@ feat(local): 本地模式添加翻译和关键词提取功能
    }
    ```
 
-4. **新增关键词提取函数**（[index.html#L799-828](file:///C:/Users/13517/Desktop/AI%20Voice%20painting/index.html#L799-828)）：
+4. **新增关键词提取函数**（[voicecanvas-ai.html#L799-828](file:///C:/Users/13517/Desktop/AI%20Voice%20painting/voicecanvas-ai.html#L799-828)）：
    ```javascript
    function extractKeywords(text) {
        const keywords = { verbs: [], shapes: [], colors: [], adjectives: [] };
@@ -112,7 +112,7 @@ feat(local): 本地模式添加翻译和关键词提取功能
    }
    ```
 
-5. **增强指令处理**（[index.html#L857-864](file:///C:/Users/13517/Desktop/AI%20Voice%20painting/index.html#L857-864)）：
+5. **增强指令处理**（[voicecanvas-ai.html#L857-864](file:///C:/Users/13517/Desktop/AI%20Voice%20painting/voicecanvas-ai.html#L857-864)）：
    ```javascript
    const translated = translateText(text);
    const keywords = extractKeywords(text);
@@ -161,7 +161,7 @@ feat(local): 本地模式添加翻译和关键词提取功能
 
 ## 相关文件
 
-- `index.html` - 主应用文件，包含翻译和关键词提取逻辑
+- `voicecanvas-ai.html` - 主应用文件，包含翻译和关键词提取逻辑
 - `DESIGN.md` - 更新设计文档，记录新功能
 
 ---
