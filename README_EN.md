@@ -18,9 +18,11 @@ A pure voice-controlled intelligent drawing tool that allows you to create art t
 ### 🎨 Local Drawing Supported Shapes
 | Category | Shapes |
 |----------|--------|
-| Basic | Circle, Rectangle, Triangle, Ellipse, Line |
-| Advanced | Star, Heart, Cross, Diamond, Pentagon |
-| Creative | Sun, Moon, House, Tree, Rainbow, Diamond, Arrow, Wave |
+| Basic | Circle, Rectangle, Triangle, Ellipse, Line, Star, Heart, Cross, Pentagon |
+| Animals | Cat, Dog, Bird, Fish, Butterfly, Rabbit, Panda, Bee, Flower |
+| Vehicles | Car, Airplane, Boat, Train |
+| Nature | Sun, Moon, House, Tree, Rainbow, Cloud, Mountain, River, Lake |
+| Others | Diamond, Arrow, Wave, Snowman, Balloon, Gift |
 
 ### 🤖 AI Drawing Support
 - Supports **Hugging Face** API
