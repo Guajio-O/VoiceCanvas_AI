@@ -31,14 +31,12 @@ A pure voice-controlled intelligent drawing tool that allows you to create art t
 - Supports **any compatible drawing API**
 - Fully open API configuration, users can fill in their own
 
-### 🔧 Command Capabilities
-- **Canvas Control**: Clear, Undo
-- **Color Switch**: 12 colors (Red, Orange, Yellow, Green, Cyan, Blue, Purple, Black, White, Brown, Pink, Gray)
-- **Line Adjustment**: Thickness adjustment (thicker, thinner)
-- **Fill Style**: Solid, Hollow
-- **Size Adjustment**: Big, Small, Bigger, Smaller
-- **Emoji Variants**: Smile sun, Cry moon
-- **Position Relationships**: Left/right/top/bottom/inside directions (e.g., "cat on the left of car", "fish in water")
+### 🔧 Voice Command Capabilities
+- **Canvas Control**: Clear, Undo (button click or voice command)
+- **Color Switch**: Use red, use blue, use green, etc. (voice command)
+- **Line Adjustment**: Thicker, thinner (voice command)
+- **Shape Drawing**: Draw circle, draw rectangle, draw sun, etc. (voice command)
+- **Position Relationships**: Cat on left of car, fish in water, etc. (voice command)
 - **Combined Commands**: Extract multiple keywords from long sentences
 
 ## 🚀 Quick Start
