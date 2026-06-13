@@ -222,28 +222,22 @@
         </div>
 
         <div class="config-panel">
+            <div class="config-group ai-only" id="apiUrlGroup">
+                <label>API 地址:</label>
+                <input type="text" id="apiUrlInput" placeholder="例如: https://api-inference.huggingface.co">
+            </div>
             <div class="config-group ai-only" id="apiKeyGroup">
-                <label>Hugging Face API Key:</label>
-                <input type="password" id="apiKey" placeholder="输入您的 Hugging Face API Key">
+                <label>API Key:</label>
+                <input type="password" id="apiKey" placeholder="输入您的 API Key">
             </div>
             <div class="config-group ai-only" id="modelGroup">
-                <label>模型:</label>
-                <select id="modelSelect">
-                    <option value="stabilityai/stable-diffusion-xl-base-1.0">Stable Diffusion XL (推荐)</option>
-                    <option value="stabilityai/stable-diffusion-xl-refiner-1.0">SD XL Refiner</option>
-                    <option value="runwayml/stable-diffusion-v1-5">Stable Diffusion v1.5</option>
-                    <option value="stabilityai/stable-diffusion-2">Stable Diffusion 2</option>
-                    <option value="stabilityai/stable-diffusion-2-1">Stable Diffusion 2.1</option>
-                    <option value="prompthero/openjourney">OpenJourney</option>
-                    <option value="nitrosocke/Ghibli-Diffusion">Ghibli Diffusion</option>
-                    <option value="Lykon/DreamShaper">DreamShaper</option>
-                    <option value="gsdf/Counterfeit-V2.5">Counterfeit V2.5</option>
-                </select>
+                <label>模型名称:</label>
+                <input type="text" id="modelInput" placeholder="例如: stabilityai/stable-diffusion-xl-base-1.0">
             </div>
             <div class="config-group">
                 <label>模式:</label>
                 <select id="modeSelect" onchange="updateModeVisibility()">
-                    <option value="ai">AI 绘图模式</option>
+                    <option value="ai" selected>AI 绘图模式</option>
                     <option value="local">本地绘图模式</option>
                 </select>
             </div>
@@ -305,14 +299,16 @@
     <script>
         // 配置
         let config = {
-            apiKey: localStorage.getItem('huggingfaceApiKey') || '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',
-            model: localStorage.getItem('huggingfaceModel') || 'stabilityai/stable-diffusion-xl-base-1.0',
-            mode: localStorage.getItem('drawingMode') || 'ai'
+            apiUrl: '',
+            apiKey: '',
+            model: '',
+            mode: 'ai'
         };
 
         // DOM 元素
+        const apiUrlInput = document.getElementById('apiUrlInput');
         const apiKeyInput = document.getElementById('apiKey');
-        const modelSelect = document.getElementById('modelSelect');
+        const modelInput = document.getElementById('modelInput');
         const modeSelect = document.getElementById('modeSelect');
         const statusIndicator = document.getElementById('statusIndicator');
         const statusText = document.getElementById('statusText');
@@ -333,7 +329,77 @@
         let recognition = null;
         let synth = window.speechSynthesis;
 
-        // 本地绘图模式的图形定义
+        // 翻译字典 - 动词、名词、形容词
+        const TRANSLATION_DICT = {
+            // 动词
+            '画': 'draw', '画一个': 'draw a', '画一只': 'draw a', '画一张': 'draw a',
+            '画一幅': 'draw a', '画一些': 'draw some', '画许多': 'draw many',
+            '绘制': 'draw', '画个': 'draw a', '画点': 'draw some',
+            
+            // 量词
+            '一个': 'a', '一只': 'a', '一张': 'a', '一幅': 'a',
+            '一些': 'some', '许多': 'many', '几个': 'several',
+            
+            // 形容词
+            '可爱的': 'cute', '美丽的': 'beautiful', '漂亮的': 'pretty',
+            '有趣的': 'funny', '卡通': 'cartoon', '好看的': 'nice',
+            '迷人的': 'charming', '神秘的': 'mysterious', '神奇的': 'magical',
+            '梦幻的': 'dreamy', '梦幻': 'dreamy', '科幻': 'sci-fi',
+            '未来': 'futuristic', '复古': 'vintage', '古典': 'classical',
+            '简单': 'simple', '复杂': 'complex', '详细': 'detailed',
+            '抽象': 'abstract', '写实': 'realistic', '明亮的': 'bright',
+            '暗淡的': 'dark', '大的': 'big', '小的': 'small', '巨大的': 'huge',
+            
+            // 名词 - 图形
+            '圆': 'circle', '圆圈': 'circle', '环形': 'circle', '环': 'circle',
+            '矩形': 'rectangle', '方': 'square', '方形': 'square', '正方形': 'square',
+            '长方形': 'rectangle', '线': 'line', '直线': 'line',
+            '三角形': 'triangle', '三角': 'triangle', '椭圆': 'ellipse',
+            '蛋形': 'ellipse', '星星': 'star', '五角星': 'star', '五角': 'star',
+            '五边形': 'pentagon', '心形': 'heart', '爱心': 'heart', '十字': 'cross',
+            '十字架': 'cross', '太阳': 'sun', '月亮': 'moon', '房子': 'house',
+            '树': 'tree', '树木': 'tree', '彩虹': 'rainbow', '钻石': 'diamond',
+            '箭头': 'arrow', '波浪': 'wave', '曲线': 'curve', '螺旋': 'spiral',
+            
+            // 名词 - 动物
+            '猫': 'cat', '狗': 'dog', '鸟': 'bird', '兔子': 'rabbit', '熊猫': 'panda',
+            '老虎': 'tiger', '狮子': 'lion', '马': 'horse', '鱼': 'fish',
+            '蝴蝶': 'butterfly', '蜜蜂': 'bee', '熊': 'bear', '狐狸': 'fox',
+            '鹿': 'deer', '狼': 'wolf', '龙': 'dragon', '独角兽': 'unicorn',
+            
+            // 名词 - 自然
+            '花': 'flower', '草': 'grass', '山': 'mountain', '海': 'ocean',
+            '天空': 'sky', '云': 'cloud', '雨': 'rain', '雪': 'snow',
+            
+            // 名词 - 人造物
+            '汽车': 'car', '飞机': 'airplane', '船': 'ship', '火车': 'train',
+            '火箭': 'rocket', '机器人': 'robot', '城堡': 'castle', '桥': 'bridge',
+            
+            // 颜色
+            '红色': 'red', '蓝色': 'blue', '绿色': 'green', '黄色': 'yellow',
+            '紫色': 'purple', '粉色': 'pink', '橙色': 'orange', '白色': 'white',
+            '黑色': 'black', '彩色': 'colorful', '金色': 'golden', '银色': 'silver',
+            '青色': 'cyan', '灰色': 'gray', '棕色': 'brown',
+            
+            // 表情
+            '笑脸': 'smiley', '哭脸': 'sad face', '微笑': 'smile', '开心': 'happy',
+            '难过': 'sad', '生气': 'angry',
+        };
+
+        // 动词列表
+        const VERBS = ['画', '画一个', '画一只', '画一张', '画一幅', '画一些', '画许多', '绘制', '画个', '画点'];
+        
+        // 名词列表 - 可绘制的图形
+        const NOUNS_SHAPES = ['圆', '圆圈', '环形', '环', '矩形', '方', '方形', '正方形', '长方形',
+            '线', '直线', '三角形', '三角', '椭圆', '蛋形', '星星', '五角星', '五角',
+            '五边形', '心形', '爱心', '十字', '十字架', '太阳', '月亮', '房子',
+            '树', '树木', '彩虹', '钻石', '箭头', '波浪', '曲线', '螺旋'];
+        
+        // 名词列表 - 颜色
+        const NOUNS_COLORS = ['红色', '蓝色', '绿色', '黄色', '紫色', '粉色', '橙色', '白色',
+            '黑色', '彩色', '金色', '银色', '青色', '灰色', '棕色'];
+
+        // 图形同义词映射
         const SHAPE_SYNONYMS = {
             '圆': ['圆', '圆圈', '环形', '环', '画个圆', '一个圆'],
             '矩形': ['矩形', '方', '方形', '正方形', '长方形', '画个方'],
@@ -363,8 +429,9 @@
 
         // 初始化
         function init() {
+            apiUrlInput.value = config.apiUrl;
             apiKeyInput.value = config.apiKey;
-            modelSelect.value = config.model;
+            modelInput.value = config.model;
             modeSelect.value = config.mode;
             updateModeVisibility();
             updateApiStatus();
@@ -372,15 +439,18 @@
 
         function updateModeVisibility() {
             const isAI = modeSelect.value === 'ai';
+            document.getElementById('apiUrlGroup').classList.toggle('hidden', !isAI);
             document.getElementById('apiKeyGroup').classList.toggle('hidden', !isAI);
             document.getElementById('modelGroup').classList.toggle('hidden', !isAI);
             config.mode = modeSelect.value;
         }
 
         function saveConfig() {
+            config.apiUrl = apiUrlInput.value;
             config.apiKey = apiKeyInput.value;
-            config.model = modelSelect.value;
+            config.model = modelInput.value;
             config.mode = modeSelect.value;
+            localStorage.setItem('huggingfaceApiUrl', config.apiUrl);
             localStorage.setItem('huggingfaceApiKey', config.apiKey);
             localStorage.setItem('huggingfaceModel', config.model);
             localStorage.setItem('drawingMode', config.mode);
@@ -391,12 +461,12 @@
 
         function updateApiStatus() {
             if (config.mode === 'ai') {
-                if (config.apiKey && config.apiKey.length > 0) {
-                    apiStatus.textContent = '✓ API Key 已配置';
-                    apiStatus.className = 'api-status ready';
-                } else {
-                    apiStatus.textContent = '⚠ 请配置 API Key';
+                if (!config.apiUrl || !config.apiKey || !config.model) {
+                    apiStatus.textContent = '⚠ 请完善 AI 配置（API地址、Key、模型）';
                     apiStatus.className = 'api-status error';
+                } else {
+                    apiStatus.textContent = '✓ AI 配置已就绪';
+                    apiStatus.className = 'api-status ready';
                 }
             } else {
                 apiStatus.textContent = '✓ 使用本地模式';
@@ -688,7 +758,19 @@
         }
 
         async function generateImage(prompt) {
-            const response = await fetch(`/api/models/${config.model}`, {
+            // 构建 API 路径
+            let apiPath = config.apiUrl;
+            if (apiPath && !apiPath.endsWith('/')) {
+                apiPath += '/';
+            }
+            if (config.model) {
+                apiPath += 'models/' + config.model;
+            }
+            
+            // 如果是相对路径，使用本地代理
+            let fetchUrl = apiPath.startsWith('http') ? apiPath : '/api/' + apiPath;
+            
+            const response = await fetch(fetchUrl, {
                 headers: {
                     Authorization: `Bearer ${config.apiKey}`,
                     'Content-Type': 'application/json',
@@ -716,23 +798,61 @@
             return await response.blob();
         }
 
+        function translateText(text) {
+            let result = text;
+            const sortedKeys = Object.keys(TRANSLATION_DICT).sort((a, b) => b.length - a.length);
+            for (const key of sortedKeys) {
+                result = result.replace(new RegExp(key, 'g'), ` ${TRANSLATION_DICT[key]} `);
+            }
+            result = result.replace(/\s+/g, ' ').trim();
+            return result;
+        }
+
+        function extractKeywords(text) {
+            const keywords = {
+                verbs: [],
+                shapes: [],
+                colors: [],
+                adjectives: []
+            };
+            
+            const lower = text.toLowerCase();
+            
+            for (const verb of VERBS) {
+                if (lower.includes(verb)) {
+                    keywords.verbs.push(verb);
+                }
+            }
+            
+            for (const shape of NOUNS_SHAPES) {
+                if (lower.includes(shape)) {
+                    keywords.shapes.push(shape);
+                }
+            }
+            
+            for (const color of NOUNS_COLORS) {
+                if (lower.includes(color)) {
+                    keywords.colors.push(color);
+                }
+            }
+            
+            return keywords;
+        }
+
         function handleLocalCommand(text) {
             const lower = text.toLowerCase();
 
-            // 清空
             if (/^(清空|清除|重来|重置)/.test(lower)) {
                 clearCanvas();
                 speak('画布已清空');
                 return;
             }
 
-            // 撤销
             if (/^(撤销|回退|后退)/.test(lower)) {
                 undo();
                 return;
             }
 
-            // 线条粗细
             if (lower.includes('粗一点') || lower.includes('粗一些')) {
                 strokeWidth = Math.min(20, strokeWidth + 2);
                 addLog('线条变粗了', 'success');
@@ -746,7 +866,35 @@
                 return;
             }
 
-            // 颜色切换
+            const translated = translateText(text);
+            const keywords = extractKeywords(text);
+            
+            addLog(`原文: ${text}`, 'info');
+            addLog(`翻译: ${translated}`, 'info');
+            addLog(`动词: ${keywords.verbs.join(', ') || '无'}`, 'info');
+            addLog(`图形: ${keywords.shapes.join(', ') || '无'}`, 'info');
+            addLog(`颜色: ${keywords.colors.join(', ') || '无'}`, 'info');
+
+            if (keywords.colors.length > 0) {
+                const color = keywords.colors[0];
+                if (COLORS[color]) {
+                    currentColor = COLORS[color];
+                    addLog(`已切换到${color}`, 'success');
+                }
+            }
+
+            if (keywords.shapes.length > 0) {
+                for (const shapeName of keywords.shapes) {
+                    const standardShape = Object.keys(SHAPE_SYNONYMS).find(
+                        key => key === shapeName || SHAPE_SYNONYMS[key].includes(shapeName)
+                    );
+                    if (standardShape) {
+                        addLocalShape(standardShape);
+                    }
+                }
+                return;
+            }
+
             for (const [name, color] of Object.entries(COLORS)) {
                 if (lower.includes(name)) {
                     currentColor = color;
@@ -756,7 +904,6 @@
                 }
             }
 
-            // 图形绘制
             for (const [standard, synonyms] of Object.entries(SHAPE_SYNONYMS)) {
                 if (lower.includes(standard) || synonyms.some(s => lower.includes(s))) {
                     addLocalShape(standard);

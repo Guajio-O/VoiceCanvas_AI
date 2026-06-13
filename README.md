@@ -88,12 +88,13 @@
 ### API 配置
 在设置面板中可以配置以下选项：
 
-| 配置项 | 说明 |
-|--------|------|
-| API类型 | Hugging Face / OpenAI / Stable Diffusion / 自定义 |
-| API地址 | 绘图API的URL |
-| API Key | 访问API的密钥（不会保存到代码中） |
-| 模型 | 选择使用的AI模型 |
+| 配置项 | 说明 | 示例 |
+|--------|------|------|
+| API 地址 | 绘图API的基础URL | `https://api-inference.huggingface.co` |
+| API Key | 访问API的密钥（不会保存到代码中） | `hf_xxxxx` |
+| 模型名称 | AI模型标识符 | `stabilityai/stable-diffusion-xl-base-1.0` |
+
+**提示**：API地址、Key和模型名称都需要填写才能使用AI绘图功能。
 
 ### 本地模式配置
 无需配置，直接可用
